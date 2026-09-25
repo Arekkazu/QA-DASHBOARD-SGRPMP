@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Panel QA — SGPMP</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --card-bg: #ffffff;
+    --border: #e2e5ea;
+    --text: #1a2028;
+    --text-muted: #6b7280;
+    --ok: #1a9c6b;
+    --ok-bg: #e6f7f0;
+    --fail: #d64545;
+    --fail-bg: #fbe9e9;
+    --pend: #b7891f;
+    --pend-bg: #fbf1e0;
+    --accent: #3457d5;
+    --row-hover: #f0f2f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171c;
+      --card-bg: #1c2028;
+      --border: #2b303b;
+      --text: #e7e9ee;
+      --text-muted: #9aa1ad;
+      --ok: #3ecf8e;
+      --ok-bg: #123527;
+      --fail: #f27272;
+      --fail-bg: #3a1e1e;
+      --pend: #e0ad4d;
+      --pend-bg: #3a2f16;
+      --accent: #7c93ff;
+      --row-hover: #242936;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  h1 { font-size: 20px; margin: 0; }
+  .meta { color: var(--text-muted); font-size: 12px; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+  .dot.off { background: var(--fail); }
+  .btn-act { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .btn-act:disabled { opacity: .6; cursor: wait; }
+  .repos { font-size: 12px; color: var(--text-muted); margin: -12px 0 16px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  .repos .mal { color: var(--fail); }
+
+  .modtabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+  .modtab {
+    background: var(--card-bg); color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  .modtab:hover { color: var(--text); }
+  .modtab.activo { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .modtab .n { opacity: .75; font-weight: 400; margin-left: 4px; }
+
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  @media (max-width: 720px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .card .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  .card .value { font-size: 26px; font-weight: 700; margin-top: 4px; }
+  .card.ok .value { color: var(--ok); }
+  .card.fail .value { color: var(--fail); }
+  .card.pend .value { color: var(--pend); }
+
+  .stackbar { height: 10px; border-radius: 6px; overflow: hidden; display: flex; margin-bottom: 24px; border: 1px solid var(--border); }
+  .stackbar > div { height: 100%; }
+  .seg-ok { background: var(--ok); }
+  .seg-fail { background: var(--fail); }
+  .seg-pend { background: var(--pend); }
+
+  section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 18px; overflow: hidden; }
+  section > h2 { font-size: 13px; margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: break-word; word-break: break-word; }
+
+  #tabla-incidencias, #tabla-taxonomia-categorias { table-layout: fixed; }
+  #tabla-incidencias th:nth-child(1), #tabla-incidencias td:nth-child(1) { width: 9%; }
+  #tabla-incidencias th:nth-child(2), #tabla-incidencias td:nth-child(2) { width: 7%; }
+  #tabla-incidencias th:nth-child(3), #tabla-incidencias td:nth-child(3) { width: 15%; }
+  #tabla-incidencias th:nth-child(4), #tabla-incidencias td:nth-child(4) { width: 9%; }
+  #tabla-incidencias th:nth-child(5), #tabla-incidencias td:nth-child(5) { width: 7%; }
+  #tabla-incidencias th:nth-child(6), #tabla-incidencias td:nth-child(6) { width: 8%; }
+  #tabla-incidencias th:nth-child(7), #tabla-incidencias td:nth-child(7) { width: 8%; }
+  #tabla-incidencias th:nth-child(8), #tabla-incidencias td:nth-child(8) { width: 8%; }
+  #tabla-incidencias th:nth-child(9), #tabla-incidencias td:nth-child(9) { width: 29%; }
+
+  #tabla-taxonomia-categorias th:nth-child(1), #tabla-taxonomia-categorias td:nth-child(1) { width: 10%; }
+  #tabla-taxonomia-categorias th:nth-child(2), #tabla-taxonomia-categorias td:nth-child(2) { width: 15%; }
+  #tabla-taxonomia-categorias th:nth-child(3), #tabla-taxonomia-categorias td:nth-child(3) { width: 16%; }
+  #tabla-taxonomia-categorias th:nth-child(4), #tabla-taxonomia-categorias td:nth-child(4) { width: 34%; }
+  #tabla-taxonomia-categorias th:nth-child(5), #tabla-taxonomia-categorias td:nth-child(5) { width: 25%; }
+  th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.fail { background: var(--fail-bg); color: var(--fail); }
+  .badge.pend { background: var(--pend-bg); color: var(--pend); }
+
+  .mini-bar { width: 100px; height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+  .mini-bar > div { height: 100%; background: var(--ok); }
+
+  .muted { color: var(--text-muted); }
+  .mono { font-family: "SF Mono", Consolas, monospace; font-size: 12px; }
+  .empty { padding: 24px 16px; color: var(--text-muted); text-align: center; }
+  .err-list { margin: 0; padding-left: 16px; }
+  .err-list li { margin-bottom: 2px; }
+  .banner { display: none; background: var(--fail-bg); color: var(--fail); padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .toolbar input[type="search"] { flex: 1 1 220px; }
+  .toolbar input, .toolbar select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px;
+  }
+  .toolbar button {
+    background: var(--bg); color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 10px; font-size: 13px; cursor: pointer;
+  }
+  .toolbar button:hover { color: var(--text); }
+  .toolbar .conteo { margin-left: auto; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+  th[data-col] { cursor: pointer; user-select: none; }
+  th[data-col]:hover { color: var(--text); }
+  th .arrow { display: inline-block; width: 10px; }
+
+  .fila-patron { cursor: pointer; }
+  .toggle-err {
+    background: none; border: none; cursor: pointer; color: var(--text-muted);
+    font-size: 11px; padding: 0 6px 0 0; width: 14px; display: inline-block;
+  }
+  .fila-patron:hover .toggle-err { color: var(--text); }
+  .fila-detalle td { background: var(--row-hover); padding: 0; }
+  .detalle-casos { padding: 10px 16px 14px 34px; display: flex; flex-direction: column; gap: 8px; }
+  .detalle-caso { display: flex; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap; }
+  .detalle-caso .mono { min-width: 108px; }
+  .detalle-caso .rf { min-width: 56px; color: var(--text-muted); }
+  .detalle-caso .msg { color: var(--text-muted); flex: 1 1 260px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Panel QA — SGPMP</h1>
+    <div class="meta"><span class="dot" id="dot"></span><span id="ultima-actualizacion">cargando…</span><button class="btn-act" id="btn-actualizar">Actualizar</button></div>
+  </header>
+  <div class="repos" id="repos"></div>
+
+  <div class="banner" id="banner">No se pudo conectar con el servidor local (server.py). Reintentando…</div>
+
+  <nav class="modtabs" id="modtabs"></nav>
+
+  <div class="cards">
+    <div class="card"><div class="label">Casos de prueba</div><div class="value" id="total">–</div></div>
+    <div class="card ok"><div class="label">% Aprobados</div><div class="value" id="pct-ok">–</div></div>
+    <div class="card fail"><div class="label">% Rechazados</div><div class="value" id="pct-fail">–</div></div>
+    <div class="card pend"><div class="label">% Pendientes</div><div class="value" id="pct-pend">–</div></div>
+  </div>
+
+  <div class="stackbar" id="stackbar"></div>
+
+  <section>
+    <h2>Por responsable — casos ejecutados en tiempo real</h2>
+    <table id="tabla-responsable"><thead><tr>
+      <th>Responsable</th><th>Asignados</th><th>Ejecutados</th><th>% Ejecutado</th><th>Aprobados</th><th>Rechazados</th><th>Pendientes</th>
+    </tr></thead><tbody></tbody></table>
+  </section>
+
+  <section>
+    <h2>Por requerimiento (RF)</h2>
+    <table id="tabla-rf"><thead><tr>
+      <th>RF</th><th>Total</th><th>Aprobados</th><th>Rechazados</th><th>Pendientes</th><th>% Aprobado</th>
+    </tr></thead><tbody></tbody></table>
+  </section>
+
+  <section>
+    <h2>Errores más frecuentes <span class="muted" style="text-transform:none; font-weight:400;">— explicación en lenguaje simple; clic en una fila para ver los casos y el detalle técnico</span></h2>
+    <table id="tabla-errores"><thead><tr>
+      <th>Veces</th><th>Qué pasó</th><th>Detalle técnico</th><th>Caso</th>
+    </tr></thead><tbody></tbody></table>
+  </section>
+
+  <section>
+    <h2>Incidencias por tipo de error</h2>
+    <nav class="modtabs" id="tabs-ronda-tipos" style="padding:12px 16px 0;"></nav>
+    <table id="tabla-tipos-error"><thead><tr>
+      <th>Categoría del error</th><th>Cantidad</th><th>% del total</th><th>Distribución</th>
+    </tr></thead><tbody></tbody></table>
+  </section>
+
+  <section>
+    <details>
+      <summary style="cursor:pointer; padding:12px 16px; font-size:13px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; font-weight:600; border-bottom:1px solid var(--border); list-style:none;">Taxonomía de categorías de error <span class="muted" style="text-transform:none; font-weight:400;">— definición oficial de referencia, clic para expandir</span></summary>
+      <table id="tabla-taxonomia-categorias"><thead><tr>
+        <th>Código</th><th>Categoría</th><th>Equipo(s) responsable(s)</th><th>Descripción breve</th><th>Ejemplo (RF real de SGPMP)</th>
+      </tr></thead><tbody>
+        <tr><td class="mono">VAL_ENTRADA</td><td>Validación de Entrada</td><td>Desarrollo</td><td>Datos mal formados, campos obligatorios vacíos o valores fuera de rango. Ocurre antes de tocar la lógica de negocio; es la categoría más frecuente.</td><td class="muted">Contraseña sin mayúscula/número/carácter especial (RF-01); coordenadas de finca fuera de rango (RF-19).</td></tr>
+        <tr><td class="mono">UNICIDAD</td><td>Unicidad / Integridad de Negocio</td><td>Desarrollo</td><td>El dato está bien formado, pero viola una regla de unicidad o de integridad referencial (ya existe, o rompe una regla estructural).</td><td class="muted">Correo o identificación ya registrados (RF-01); nombre de especie duplicado, case-insensitive (RF-15).</td></tr>
+        <tr><td class="mono">ESTADO</td><td>Estado / Precondición</td><td>Desarrollo</td><td>La entidad existe y el dato es válido, pero no está en el estado correcto para ejecutar la operación.</td><td class="muted">Cuenta INACTIVO/BLOQUEADO no puede autenticarse (RF-02); especie con entrenamiento activo no se puede desactivar (RF-15).</td></tr>
+        <tr><td class="mono">FLUJO</td><td>Flujo / Proceso</td><td>Desarrollo</td><td>El error ocurre durante la ejecución de un proceso de varias etapas: tokens, cálculos, procesos por lotes, rollbacks.</td><td class="muted">Token de activación expirado o ya usado (RF-01); rollback por fallo de BD al aplicar plantilla (RF-32).</td></tr>
+        <tr><td class="mono">INFRAESTRUC</td><td>Infraestructura / Sistema Externo</td><td>Implementación (ambiente TEST) o Despliegue (producción)</td><td>El error no es del dato ni de la lógica de negocio: es de un componente externo (BD caída, servicio de correo, red IoT sin conexión, almacenamiento).</td><td class="muted">Servicio de correo no disponible al enviar token (RF-01); fallo de BD al persistir un evento de auditoría (RF-10).</td></tr>
+        <tr><td class="mono">HTTP_COM</td><td>HTTP / Comunicación</td><td>Desarrollo (contrato de API) o Implementación (conectividad del ambiente)</td><td>Errores del protocolo de comunicación entre componentes: peticiones malformadas, timeouts, credenciales de dispositivo inválidas.</td><td class="muted">HTTP 409 por identificador de activo duplicado (RF-33); dispositivo IoT sin API Key válido (RF-53).</td></tr>
+        <tr><td class="mono">AUTORIZACION</td><td>Autorización / Permisos</td><td>Desarrollo</td><td>El usuario está autenticado (pasó el login) pero no tiene permisos para esa operación específica (modelo RBAC, RF-04).</td><td class="muted">Productor intenta acceder al historial de auditoría completo (RF-10); usuario sin permiso ve identificación completa (RF-12).</td></tr>
+        <tr><td class="mono">UI_ACCESIBILIDAD</td><td>Interfaz / Accesibilidad (agregada por QA)</td><td>Desarrollo</td><td>No forma parte de la taxonomía original de Desarrollo (está enfocada en backend). QA la agrega para clasificar hallazgos de interfaz, WCAG y consistencia visual detectados con herramientas como axe-core.</td><td class="muted">Falta lang="es" en &lt;html&gt; y falta &lt;title&gt; en Login y Registro (TC-DIS-01/04, WCAG 3.1.1 y 2.4.2).</td></tr>
+        <tr><td class="mono">AUTENTICACION</td><td>Autenticación / Gestión de Sesión</td><td>Desarrollo</td><td>El usuario no logra autenticarse, o su sesión (token, expiración, cierre de sesión) no se maneja correctamente. Distinto de AUTORIZACION: aquí el problema es antes o durante el login, no con los permisos de un usuario ya autenticado.</td><td class="muted">El token de sesión no se invalida tras cerrar sesión; la sesión expira antes del tiempo configurado.</td></tr>
+        <tr><td class="mono">AUDITORIA</td><td>Auditoría / Trazabilidad</td><td>Desarrollo</td><td>Un evento que debía quedar registrado en el log de auditoría no se genera, queda incompleto, o no es consultable como exige el requerimiento (relacionado con OWASP A09).</td><td class="muted">El evento CONSULTA_AUDITORIA no queda registrado al consultar el historial (RF-10).</td></tr>
+        <tr><td class="mono">SEGURIDAD</td><td>Seguridad (otros OWASP)</td><td>Desarrollo / Implementación</td><td>Hallazgo de seguridad que no es de Autorización (permisos) ni de Autenticación (sesión): límite de tasa, exposición excesiva de datos, consumo de recursos sin control, etc.</td><td class="muted">Un endpoint sin rate limit permite intentos de fuerza bruta ilimitados (OWASP API4).</td></tr>
+        <tr><td class="mono">FUNCIONAL</td><td>Funcional / Regla de Negocio</td><td>Desarrollo</td><td>El sistema responde correctamente (2xx) pero el resultado no cumple la regla de negocio esperada, sin encajar en Validación de Entrada, Unicidad, Estado o Flujo. Catch-all para lógica de negocio incorrecta; si se repite mucho en una misma área, conviene revisar si merece su propio código.</td><td class="muted">Un cálculo de costeo NIC 41 da un resultado distinto al esperado sin que ninguna validación falle.</td></tr>
+        <tr><td class="mono">FRONT_RENDER</td><td>Frontend / Renderizado y Estado Visual</td><td>Desarrollo Frontend</td><td>La interfaz no refleja correctamente el estado real de los datos: no se actualiza tras una acción, muestra datos obsoletos o duplicados, o el layout se rompe.</td><td class="muted">La tabla de activos no se refresca tras eliminar un registro; un contador de notificaciones queda desincronizado.</td></tr>
+        <tr><td class="mono">FRONT_ESTADO_CLIENTE</td><td>Frontend / Estado en Cliente</td><td>Desarrollo Frontend</td><td>Error en el manejo del estado local o global de la aplicación (store, formularios, caché en memoria): pérdida de datos entre pantallas o condiciones de carrera del lado del cliente.</td><td class="muted">Un formulario pierde los datos ingresados al navegar y volver; un doble clic en "Guardar" envía la petición dos veces.</td></tr>
+        <tr><td class="mono">FRONT_PWA</td><td>Frontend / PWA y Offline</td><td>Desarrollo Frontend</td><td>Falla específica de las capacidades PWA: service worker, caché offline, manifest, instalación o sincronización en segundo plano.</td><td class="muted">La app no funciona sin conexión pese a estar "instalada" como PWA; el Service Worker sigue sirviendo una versión vieja tras un despliegue.</td></tr>
+      </tbody></table>
+    </details>
+  </section>
+
+  <section>
+    <h2>Incidencias registradas</h2>
+    <div class="toolbar">
+      <input type="search" id="buscador-inc" placeholder="Buscar por ID, RF, categoría o descripción…">
+      <select id="filtro-estado-inc"><option value="Todos">Todos los estados</option></select>
+      <button type="button" id="limpiar-filtros-inc">Limpiar filtros</button>
+      <span class="conteo" id="conteo-filtrado-inc"></span>
+    </div>
+    <table id="tabla-incidencias"><thead><tr>
+      <th data-col-inc="ID">ID <span class="arrow"></span></th>
+      <th data-col-inc="RF relacionado">RF <span class="arrow"></span></th>
+      <th>Categoría</th><th>Equipo</th><th>Severidad</th>
+      <th data-col-inc="Estado">Estado <span class="arrow"></span></th>
+      <th data-col-inc="Fecha limite">Fecha límite <span class="arrow"></span></th>
+      <th>Evaluador</th>
+      <th>Descripción</th>
+    </tr></thead><tbody></tbody></table>
+  </section>
+
+  <section>
+    <h2>Todos los casos de prueba</h2>
+    <div class="toolbar">
+      <input type="search" id="buscador" placeholder="Buscar por TC, RF o mensaje de error…">
+      <select id="filtro-estado">
+        <option value="Todos">Todos los estados</option>
+        <option value="Aprobado">Aprobado</option>
+        <option value="Rechazado">Rechazado</option>
+        <option value="Pendiente">Pendiente</option>
+      </select>
+      <select id="filtro-rf"><option value="Todos">Todos los RF</option></select>
+      <select id="filtro-origen">
+        <option value="Todos">Backend + Frontend</option>
+        <option value="backend">Solo backend</option>
+        <option value="frontend">Solo frontend</option>
+      </select>
+      <select id="filtro-responsable"><option value="Todos">Todos los responsables</option></select>
+      <button type="button" id="limpiar-filtros">Limpiar filtros</button>
+      <span class="conteo" id="conteo-filtrado"></span>
+    </div>
+    <table id="tabla-casos"><thead><tr>
+      <th data-col="tc_id">TC <span class="arrow"></span></th>
+      <th data-col="modulo">Módulo <span class="arrow"></span></th>
+      <th data-col="rf">RF <span class="arrow"></span></th>
+      <th data-col="origen">Origen <span class="arrow"></span></th>
+      <th data-col="tipo_reporte">Reporte <span class="arrow"></span></th>
+      <th data-col="estado">Estado <span class="arrow"></span></th>
+      <th data-col="responsable">Responsable <span class="arrow"></span></th>
+      <th>Errores</th>
+    </tr></thead><tbody></tbody></table>
+  </section>
+</div>
+
+<script>
+const REFRESCO_MS = 5000;
+
+let ultimoData = null;
+const estado = { modulo: 'Todos', rondaTipos: 'Todos' };
+
+// Numero ordinal de ronda de evaluacion -> etiqueta para el usuario.
+// ronda_evaluacion lo calcula scanner.py (_ronda_incidencia) a partir de
+// marcas de version (v2.0, V3, reintento2, revision 3...) en el ID de la
+// incidencia y en 'Evidencia / Notas'; 1 es el valor por defecto cuando no
+// se encuentra ninguna marca (primera vez que se detecto el defecto).
+const ETIQUETAS_RONDA = { 1: '1.ª evaluación', 2: '2.ª evaluación', 3: '3.ª evaluación', 4: '4.ª evaluación' };
+function etiquetaRonda(n) {
+  return ETIQUETAS_RONDA[n] || `${n}.ª evaluación`;
+}
+const filtro = { texto: '', estado: 'Todos', rf: 'Todos', origen: 'Todos', responsable: 'Todos', ordenCol: 'tc_id', ordenAsc: true };
+const filtroInc = { texto: '', estado: 'Todos', ordenCol: null, ordenAsc: true };
+const patronesExpandidos = new Set();
+
+function partesTC(tcId) {
+  const m = /TC-M0(\d+)-(\d+)/i.exec(tcId || '');
+  return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : [0, 0];
+}
+function compararTC(a, b) {
+  const [am, an] = partesTC(a);
+  const [bm, bn] = partesTC(b);
+  return am !== bm ? am - bm : an - bn;
+}
+function numeroRF(rf) {
+  const m = /RF-(\d+)/i.exec(rf || '');
+  return m ? parseInt(m[1], 10) : 0;
+}
+// "Test_Modulo1" (backend) y "Modulo1" (frontend) -> 1. Unifica ambas convenciones de carpeta.
+function numeroModulo(m) {
+  const match = /Modulo0*(\d+)/i.exec(m || '');
+  return match ? parseInt(match[1], 10) : null;
+}
+// Toda incidencia sigue el patron INC-M0<modulo>-... en este proyecto.
+function moduloDeIncidencia(inc) {
+  const match = /INC-M0(\d+)-/i.exec((inc && inc['ID']) || '');
+  return match ? parseInt(match[1], 10) : null;
+}
+
+function badgeEstado(estadoTc) {
+  const clase = estadoTc === 'Aprobado' ? 'ok' : estadoTc === 'Rechazado' ? 'fail' : 'pend';
+  return `<span class="badge ${clase}">${estadoTc}</span>`;
+}
+
+function pctBar(pct) {
+  return `<span class="mini-bar"><div style="width:${pct}%"></div></span>${pct}%`;
+}
+
+function esc(s) {
+  return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- Datos derivados del modulo seleccionado (pestañas) ----------------
+
+function casosDelModulo() {
+  if (!ultimoData) return [];
+  if (estado.modulo === 'Todos') return ultimoData.casos;
+  return ultimoData.casos.filter(c => numeroModulo(c.modulo) === estado.modulo);
+}
+
+function incidenciasDelModulo() {
+  if (!ultimoData) return [];
+  if (estado.modulo === 'Todos') return ultimoData.incidencias;
+  return ultimoData.incidencias.filter(i => moduloDeIncidencia(i) === estado.modulo);
+}
+
+function calcularResumen(casos) {
+  const total = casos.length;
+  const aprobados = casos.filter(c => c.estado === 'Aprobado').length;
+  const rechazados = casos.filter(c => c.estado === 'Rechazado').length;
+  const pendientes = total - aprobados - rechazados;
+  const pct = n => total ? Math.round(1000 * n / total) / 10 : 0;
+  return {
+    total, aprobados, rechazados, pendientes,
+    pct_aprobados: pct(aprobados), pct_rechazados: pct(rechazados), pct_pendientes: pct(pendientes),
+  };
+}
+
+function calcularPorResponsable(casos) {
+  const grupos = new Map();
+  for (const c of casos) {
+    const key = c.responsable || 'Sin asignar';
+    if (!grupos.has(key)) grupos.set(key, { responsable: key, asignados: 0, ejecutados: 0, aprobados: 0, rechazados: 0, pendientes: 0 });
+    const g = grupos.get(key);
+    g.asignados++;
+    if (c.estado !== 'Pendiente') g.ejecutados++;
+    if (c.estado === 'Aprobado') g.aprobados++;
+    else if (c.estado === 'Rechazado') g.rechazados++;
+    else g.pendientes++;
+  }
+  return Array.from(grupos.values())
+    .map(g => ({ ...g, pct_ejecutado: g.asignados ? Math.round(100 * g.ejecutados / g.asignados) : 0 }))
+    .sort((a, b) => a.responsable.localeCompare(b.responsable));
+}
+
+function calcularPorRf(casos) {
+  const grupos = new Map();
+  for (const c of casos) {
+    if (!grupos.has(c.rf)) grupos.set(c.rf, { rf: c.rf, total: 0, aprobados: 0, rechazados: 0, pendientes: 0 });
+    const g = grupos.get(c.rf);
+    g.total++;
+    if (c.estado === 'Aprobado') g.aprobados++;
+    else if (c.estado === 'Rechazado') g.rechazados++;
+    else g.pendientes++;
+  }
+  return Array.from(grupos.values()).sort((a, b) => numeroRF(a.rf) - numeroRF(b.rf));
+}
+
+// Misma normalizacion que _normalizar_error() en scanner.py, para que el
+// patron calculado aqui coincida con el criterio del backend.
+function normalizarError(msg) {
+  let m = (msg || '').replace(/\d+/g, '#');
+  m = m.replace(/\s+/g, ' ').trim();
+  return m.slice(0, 180);
+}
+
+// Traduce el mensaje crudo de la herramienta (Newman/Cypress/Pytest) a una
+// frase en lenguaje simple, para poder exponer los resultados sin tecnicismos.
+// Si no reconoce el patron, devuelve el mensaje limpio de prefijos.
+const _HTTP = {
+  '200': 'OK', '201': 'creado', '202': 'aceptado', '204': 'sin contenido',
+  '400': 'petición inválida', '401': 'no autenticado', '403': 'sin permiso',
+  '404': 'no encontrado', '409': 'conflicto o duplicado', '412': 'condición previa fallida',
+  '422': 'datos rechazados', '423': 'recurso bloqueado', '429': 'demasiadas solicitudes',
+  '500': 'error interno del servidor', '503': 'servicio no disponible',
+};
+function explicarError(msg) {
+  const raw = (msg || '').replace(/\s+/g, ' ').trim();
+  const nom = c => _HTTP[c] || ('código ' + c);
+
+  let m = raw.match(/status code (\d{3}).*?but got (\d{3})/i);
+  if (m) {
+    const esp = m[1], got = m[2];
+    if (got === '500') return `El servidor falló con un error interno (500) cuando debía responder "${nom(esp)}" (${esp}).`;
+    if (got === '503') return `El servidor no estaba disponible (503); se esperaba "${nom(esp)}".`;
+    if (['200', '201', '202', '204'].includes(esp) && ['400', '401', '403', '404', '409', '422'].includes(got))
+      return `El servidor rechazó la operación con "${nom(got)}" (${got}) cuando debía completarla.`;
+    if (['401', '403', '404', '409', '412', '422', '423', '429'].includes(esp) && ['200', '201', '204'].includes(got))
+      return `El servidor aceptó (${got}) una operación que debía rechazar con "${nom(esp)}" (${esp}).`;
+    return `El servidor respondió ${got} ("${nom(got)}") en vez del ${esp} ("${nom(esp)}") esperado.`;
+  }
+  m = raw.match(/expected (\d{3}) to be within 2\d\d\.\.2\d\d/i);
+  if (m) return m[1][0] === '5'
+    ? `El servidor falló con un error (${m[1]}) cuando debía responder correctamente (2xx).`
+    : `El servidor respondió ${m[1]} cuando debía responder con un código exitoso (2xx).`;
+
+  if (/injectaxe/i.test(raw)) return 'Falta un complemento en la herramienta de pruebas de accesibilidad; hay que ajustar el proyecto de automatización (no es un fallo del producto).';
+  if (/is not a function|is not iterable|cannot read propert|target cannot be null|undefined \(reading/i.test(raw))
+    return 'La prueba automatizada se cortó por un dato faltante (normalmente porque un paso anterior no devolvió lo esperado); revisar el script antes de darlo por defecto del producto.';
+  if (/teardown \d* ?omitido|no se obtuvo id_/i.test(raw))
+    return 'No se pudieron limpiar los datos de prueba porque el registro previo falló.';
+  if (/bloqueado|no est[aá] disponible en (la interfaz|la interfaz actual|configuraci)/i.test(raw))
+    return 'La funcionalidad todavía no existe en la pantalla, así que la prueba no se pudo ejecutar.';
+
+  if (/expected nan|\bnan\b/i.test(raw)) return 'Un cálculo del servidor devolvió un valor no numérico (NaN) donde debía haber un número.';
+  m = raw.match(/expected (\d+) to be at most (\d+)/i);
+  if (m) return `Un valor superó el límite permitido: fue ${m[1]}, el máximo aceptable es ${m[2]} (posible problema de rendimiento).`;
+  if (/to be at most \d+/i.test(raw)) return 'Un valor superó el límite máximo permitido.';
+  if (/(to be above \+?0|expected \+?0 to be above|al menos 1 (coincidencia|entrada|resultado))/i.test(raw))
+    return 'Se esperaba encontrar al menos un registro y no se encontró ninguno.';
+  if (/to equal \+?0|expected \d+ to equal \+?0/i.test(raw)) return 'El conteo de registros no coincidió con lo esperado.';
+  if (/expected undefined .*(to be a number|number)/i.test(raw)) return 'Un valor numérico que la prueba esperaba llegó vacío en la respuesta.';
+  if (/expected undefined (to|not)|to (not )?have property|expected \{[^}]*\} to (not )?have property/i.test(raw))
+    return 'La respuesta del servidor no incluye un dato que la prueba esperaba (llegó vacío o con otra estructura).';
+  if (/expected false to be true/i.test(raw)) return 'Una verificación del sistema no se cumplió (dio falso donde se esperaba verdadero).';
+  if (/expected true to be false/i.test(raw)) return 'Ocurrió una condición que no debía ocurrir.';
+  if (/not to (deeply )?equal|to (deeply )?equal/i.test(raw)) return 'Un valor de la respuesta no coincide con el valor esperado.';
+
+  // Mensajes que QA ya redactó en español: solo se limpian los prefijos técnicos.
+  let limpio = raw
+    .replace(/^(AssertionError|TypeError|Error|CypressError|RuntimeError|expect\(received\))[:\s-]*/i, '')
+    .replace(/^(CP-?\d+|Checkpoint \d+|Sub-?caso \d+)[:\s.-]*/i, '')
+    .trim();
+  return limpio.length > 240 ? limpio.slice(0, 237) + '…' : (limpio || raw);
+}
+
+function calcularErrores(casos) {
+  const porPatron = new Map();
+  for (const c of casos) {
+    for (const e of (c.errores || [])) {
+      const clave = normalizarError(e);
+      if (!clave) continue;
+      if (!porPatron.has(clave)) {
+        porPatron.set(clave, { patron: clave, veces: 0, ejemplo: e, tc_ejemplo: c.tc_id, casos: [] });
+      }
+      const g = porPatron.get(clave);
+      g.veces++;
+      if (!g.casos.some(x => x.tc_id === c.tc_id)) {
+        g.casos.push({ tc_id: c.tc_id, rf: c.rf, responsable: c.responsable, estado: c.estado, mensaje: e });
+      }
+    }
+  }
+  return Array.from(porPatron.values()).sort((a, b) => b.veces - a.veces).slice(0, 12);
+}
+
+// ---- Render: pestañas por modulo ----------------------------------------
+
+function renderTabs() {
+  const nav = document.getElementById('modtabs');
+  const modulos = Array.from(new Set(ultimoData.casos.map(c => numeroModulo(c.modulo)).filter(n => n != null))).sort((a, b) => a - b);
+  const items = [{ label: 'Todos los módulos', val: 'Todos' }, ...modulos.map(n => ({ label: 'Módulo ' + n, val: n }))];
+  nav.innerHTML = items.map(it => {
+    const activo = estado.modulo === it.val;
+    const n = calcularResumen(it.val === 'Todos' ? ultimoData.casos : ultimoData.casos.filter(c => numeroModulo(c.modulo) === it.val)).total;
+    return `<button type="button" class="modtab ${activo ? 'activo' : ''}" data-val="${esc(it.val)}">${esc(it.label)}<span class="n">${n}</span></button>`;
+  }).join('');
+  nav.querySelectorAll('.modtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.val;
+      estado.modulo = v === 'Todos' ? 'Todos' : parseInt(v, 10);
+      renderTodo();
+    });
+  });
+}
+
+// ---- Render: errores frecuentes (con desplegable de casos) --------------
+
+function renderErrores(casos) {
+  const errores = calcularErrores(casos);
+  const tbody = document.querySelector('#tabla-errores tbody');
+  if (!errores.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty">Sin errores registrados</td></tr>';
+    return;
+  }
+  tbody.innerHTML = errores.map(e => {
+    const abierto = patronesExpandidos.has(e.patron);
+    const filaPatron = `<tr class="fila-patron" data-key="${esc(e.patron)}">
+        <td><strong>${e.veces}×</strong></td>
+        <td><span class="toggle-err">${abierto ? '▾' : '▸'}</span>${esc(explicarError(e.ejemplo || e.patron))}</td>
+        <td class="mono muted" style="font-size:11px;">${esc(e.patron)}</td>
+        <td class="mono">${esc(e.tc_ejemplo)}</td>
+      </tr>`;
+    const filaDetalle = abierto ? `<tr class="fila-detalle"><td colspan="4"><div class="detalle-casos">` +
+      e.casos.map(c => `<div class="detalle-caso">
+            <span class="mono">${esc(c.tc_id)}</span>
+            <span class="rf">${esc(c.rf)}</span>
+            ${badgeEstado(c.estado)}
+            <span class="muted">${esc(c.responsable)}</span>
+            <span class="msg">${esc(explicarError(c.mensaje))}<br><span class="mono muted" style="font-size:11px;">${esc(c.mensaje)}</span></span>
+          </div>`).join('') +
+      `</div></td></tr>` : '';
+    return filaPatron + filaDetalle;
+  }).join('');
+
+  tbody.querySelectorAll('.fila-patron').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const key = tr.dataset.key;
+      if (patronesExpandidos.has(key)) patronesExpandidos.delete(key); else patronesExpandidos.add(key);
+      renderErrores(casosDelModulo());
+    });
+  });
+}
+
+// ---- Render: incidencias por tipo de error -------------------------------
+
+// Taxonomia de "Categoria del error": los 8 codigos originales de Desarrollo
+// (backend) mas 7 ampliados el 2026-09-18 para cubrir lo que venia cayendo en
+// "Sin clasificar" (~28% de una muestra real) y lo que no tenia cabida del
+// lado frontend/PWA. La columna en incidencias.csv es texto libre y cada
+// evaluador la redacta distinto ("HTTP_COM - HTTP / Comunicacion", "Seguridad
+// - OWASP API1 BOLA...", "FUNCIONAL/BACKEND", etc.), asi que la normalizamos
+// en dos fases:
+//   1) si el texto ya trae uno de los codigos oficiales, se usa el que
+//      aparece primero (el evaluador lo puso como categoria principal, el
+//      resto son anotaciones).
+//   2) si no, se busca por las palabras clave de la definicion oficial de
+//      cada codigo. Lo que aun asi no calza cae en "Sin clasificar": mejor
+//      visible para que QA lo revise que forzado a un codigo que no aplica.
+const ETIQUETAS_CATEGORIA_ERROR = {
+  VAL_ENTRADA: 'Validación de entrada (VAL_ENTRADA)',
+  UNICIDAD: 'Unicidad / Integridad de negocio (UNICIDAD)',
+  ESTADO: 'Estado / Precondición (ESTADO)',
+  FLUJO: 'Flujo / Proceso (FLUJO)',
+  INFRAESTRUC: 'Infraestructura / Sistema externo (INFRAESTRUC)',
+  HTTP_COM: 'HTTP / Comunicación (HTTP_COM)',
+  AUTORIZACION: 'Autorización / Permisos (AUTORIZACION)',
+  UI_ACCESIBILIDAD: 'Interfaz / Accesibilidad (UI_ACCESIBILIDAD)',
+  AUTENTICACION: 'Autenticación / Gestión de sesión (AUTENTICACION)',
+  AUDITORIA: 'Auditoría / Trazabilidad (AUDITORIA)',
+  SEGURIDAD: 'Seguridad — otros OWASP (SEGURIDAD)',
+  FUNCIONAL: 'Funcional / Regla de negocio (FUNCIONAL)',
+  FRONT_RENDER: 'Frontend / Renderizado y estado visual (FRONT_RENDER)',
+  FRONT_ESTADO_CLIENTE: 'Frontend / Estado en cliente (FRONT_ESTADO_CLIENTE)',
+  FRONT_PWA: 'Frontend / PWA y offline (FRONT_PWA)',
+  SIN_CLASIFICAR: 'Sin clasificar — no encaja en ningún código oficial',
+};
+const CODIGOS_CATEGORIA_ERROR = Object.keys(ETIQUETAS_CATEGORIA_ERROR).filter(c => c !== 'SIN_CLASIFICAR');
+
+function normalizarTextoCategoria(s) {
+  return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+}
+
+function categoriaBase(cat) {
+  const raw = (cat || '').trim();
+  if (!raw) return 'SIN_CLASIFICAR';
+  const norm = normalizarTextoCategoria(raw);
+
+  // Fase 1: codigo oficial ya escrito en el texto -> el que aparece primero.
+  let mejorPos = Infinity, mejorCodigo = null;
+  for (const codigo of CODIGOS_CATEGORIA_ERROR) {
+    const patron = codigo === 'INFRAESTRUC' ? /INFRAESTRUC(TURA)?/ : new RegExp(codigo);
+    const m = norm.match(patron);
+    if (m && m.index < mejorPos) { mejorPos = m.index; mejorCodigo = codigo; }
+  }
+  if (mejorCodigo) return mejorCodigo;
+
+  // Fase 2: palabras clave de la definicion oficial de cada codigo.
+  // Las especificas de frontend/seguridad/auditoria van primero porque usan
+  // palabras (p.ej. "seguridad", "estado") que de otro modo caerian en
+  // categorias backend mas genericas mas abajo.
+  if (norm.includes('SERVICE WORKER') || norm.includes(' PWA') || norm.includes('OFFLINE') || norm.includes('MANIFEST')) return 'FRONT_PWA';
+  if (norm.includes('ESTADO EN CLIENTE') || norm.includes('ESTADO LOCAL') || norm.includes('FORMULARIO PIERDE') || norm.includes('DOBLE ENVIO')) return 'FRONT_ESTADO_CLIENTE';
+  if (norm.includes('RENDERIZADO') || norm.includes('RENDER') || norm.includes('VISTA DESACTUALIZADA') || norm.includes('NO SE REFRESCA') || norm.includes('NO SE ACTUALIZA LA VISTA')) return 'FRONT_RENDER';
+  if (norm.includes('AUDITORIA') || norm.includes('TRAZABILIDAD')) return 'AUDITORIA';
+  if (norm.includes('AUTENTICACION') || norm.includes('GESTION DE SESION') || norm.includes('SESION')) return 'AUTENTICACION';
+  if (norm.includes('UNICIDAD')) return 'UNICIDAD';
+  if (/\bESTADO\b/.test(norm)) return 'ESTADO';
+  if (/\bHTTP\b/.test(norm) || norm.includes('COMUNICACION') || norm.includes('CONTRATO') || /\bAPI\b/.test(norm)) return 'HTTP_COM';
+  if (norm.includes('DESPLIEGUE') || norm.includes('AMBIENTE') || norm.includes('DATOS DE PRUEBA') || norm.includes('CONFIGURACION')) return 'INFRAESTRUC';
+  if (norm.includes('FLUJO') || norm.includes('PROCESO')) return 'FLUJO';
+  if (norm.includes('CONTROL DE ACCESO') || norm.includes('BOLA') || norm.includes('AUTORIZACION') || norm.includes('PERMISO')) return 'AUTORIZACION';
+  if (norm.includes('ACCESIBILIDAD') || norm.includes('USABILIDAD') || norm.includes('UI/UX') || norm.includes('WCAG')) return 'UI_ACCESIBILIDAD';
+  if (norm.includes('VALIDACION') || norm.includes('ENTRADA')) return 'VAL_ENTRADA';
+  if (norm.includes('RATE_LIMIT') || norm.includes('RATE LIMIT') || norm.includes('RESOURCE CONSUMPTION') || norm.includes('SEGURIDAD')) return 'SEGURIDAD';
+  if (norm.includes('FUNCIONAL') || norm.includes('REGLA_NEGOCIO') || norm.includes('REGLA DE NEGOCIO') || norm.includes('CALCULO')) return 'FUNCIONAL';
+
+  return 'SIN_CLASIFICAR';
+}
+
+// Pestañas "1.ª evaluación" / "2.ª evaluación" / ... dentro de la sección
+// "Incidencias por tipo de error": sin esto, las reevaluaciones se suman a
+// las incidencias originales y el conteo de errores nunca baja, aunque el
+// defecto ya se haya corregido y solo quede la incidencia de confirmación.
+function renderTabsRonda() {
+  const nav = document.getElementById('tabs-ronda-tipos');
+  const incidencias = incidenciasDelModulo();
+  const rondas = Array.from(new Set(incidencias.map(i => i['ronda_evaluacion'] || 1))).sort((a, b) => a - b);
+  if (estado.rondaTipos !== 'Todos' && !rondas.includes(estado.rondaTipos)) estado.rondaTipos = 'Todos';
+  const items = [{ label: 'Todas las rondas', val: 'Todos' }, ...rondas.map(r => ({ label: etiquetaRonda(r), val: r }))];
+  nav.innerHTML = items.map(it => {
+    const activo = estado.rondaTipos === it.val;
+    const n = (it.val === 'Todos' ? incidencias : incidencias.filter(i => (i['ronda_evaluacion'] || 1) === it.val)).length;
+    return `<button type="button" class="modtab ${activo ? 'activo' : ''}" data-val="${esc(it.val)}">${esc(it.label)}<span class="n">${n}</span></button>`;
+  }).join('');
+  nav.querySelectorAll('.modtab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.val;
+      estado.rondaTipos = v === 'Todos' ? 'Todos' : parseInt(v, 10);
+      renderTiposError();
+      renderTabsRonda();
+    });
+  });
+}
+
+function renderTiposError() {
+  if (!ultimoData) return;
+  let incidencias = incidenciasDelModulo();
+  if (estado.rondaTipos !== 'Todos') {
+    incidencias = incidencias.filter(i => (i['ronda_evaluacion'] || 1) === estado.rondaTipos);
+  }
+  const conteos = new Map();
+  incidencias.forEach(i => {
+    const cat = categoriaBase(i['Categoria del error']);
+    conteos.set(cat, (conteos.get(cat) || 0) + 1);
+  });
+  const total = incidencias.length;
+  const filas = Array.from(conteos.entries()).sort((a, b) => b[1] - a[1]);
+  const tbody = document.querySelector('#tabla-tipos-error tbody');
+  tbody.innerHTML = filas.length ? filas.map(([cat, n]) => {
+    const pct = total ? (n / total * 100) : 0;
+    const etiqueta = ETIQUETAS_CATEGORIA_ERROR[cat] || cat;
+    const claseFila = cat === 'SIN_CLASIFICAR' ? ' style="color:var(--pend);"' : '';
+    return `<tr${claseFila}>
+      <td>${esc(etiqueta)}</td>
+      <td>${n}</td>
+      <td>${pct.toFixed(1)}%</td>
+      <td><span class="mini-bar"><div style="width:${pct}%"></div></span></td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="4" class="empty">Sin incidencias registradas</td></tr>';
+}
+
+// ---- Render: incidencias -------------------------------------------------
+
+function poblarFiltroEstadoInc(incidencias) {
+  const select = document.getElementById('filtro-estado-inc');
+  const actual = select.value;
+  const estados = Array.from(new Set(incidencias.map(i => (i['Estado'] || '').trim()).filter(Boolean))).sort();
+  select.innerHTML = '<option value="Todos">Todos los estados</option>' +
+    estados.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
+  if (estados.includes(actual)) select.value = actual;
+}
+
+function filtrarIncidencias(incidencias) {
+  const texto = filtroInc.texto.trim().toLowerCase();
+  return incidencias.filter(i => {
+    if (estado.modulo !== 'Todos' && moduloDeIncidencia(i) !== estado.modulo) return false;
+    if (filtroInc.estado !== 'Todos' && (i['Estado'] || '').trim() !== filtroInc.estado) return false;
+    if (texto) {
+      const campos = ['ID', 'RF relacionado', 'Categoria del error', 'Equipo responsable', 'Descripcion del error'];
+      const coincide = campos.some(campo => (i[campo] || '').toLowerCase().includes(texto));
+      if (!coincide) return false;
+    }
+    return true;
+  });
+}
+
+function ordenarIncidencias(incidencias) {
+  if (!filtroInc.ordenCol) return incidencias;
+  const dir = filtroInc.ordenAsc ? 1 : -1;
+  const arr = [...incidencias];
+  arr.sort((a, b) => (a[filtroInc.ordenCol] || '').localeCompare(b[filtroInc.ordenCol] || '') * dir);
+  return arr;
+}
+
+function actualizarFlechasOrdenInc() {
+  document.querySelectorAll('#tabla-incidencias th[data-col-inc]').forEach(th => {
+    const arrow = th.querySelector('.arrow');
+    arrow.textContent = th.dataset.colInc === filtroInc.ordenCol ? (filtroInc.ordenAsc ? '▲' : '▼') : '';
+  });
+}
+
+function renderIncidencias() {
+  if (!ultimoData) return;
+  const filtradas = ordenarIncidencias(filtrarIncidencias(ultimoData.incidencias));
+  const tbody = document.querySelector('#tabla-incidencias tbody');
+  tbody.innerHTML = filtradas.length ? filtradas.map(i => `<tr>
+      <td class="mono">${esc(i['ID'])}</td>
+      <td>${esc(i['RF relacionado'])}</td>
+      <td>${esc(i['Categoria del error'])}</td>
+      <td>${esc(i['Equipo responsable'])}</td>
+      <td>${esc(i['Severidad'])}</td>
+      <td>${esc(i['Estado'])}</td>
+      <td>${esc(i['Fecha limite'])}</td>
+      <td>${esc(i['Evaluador'] || '—')}</td>
+      <td class="muted">${esc((i['Descripcion del error']||'').slice(0,140))}${(i['Descripcion del error']||'').length>140?'…':''}</td>
+    </tr>`).join('') : '<tr><td colspan="9" class="empty">Sin incidencias que coincidan con el filtro</td></tr>';
+  document.getElementById('conteo-filtrado-inc').textContent = `${filtradas.length} de ${incidenciasDelModulo().length} incidencias`;
+  actualizarFlechasOrdenInc();
+}
+
+document.getElementById('buscador-inc').addEventListener('input', e => { filtroInc.texto = e.target.value; renderIncidencias(); });
+document.getElementById('filtro-estado-inc').addEventListener('change', e => { filtroInc.estado = e.target.value; renderIncidencias(); });
+document.getElementById('limpiar-filtros-inc').addEventListener('click', () => {
+  filtroInc.texto = ''; filtroInc.estado = 'Todos';
+  document.getElementById('buscador-inc').value = '';
+  document.getElementById('filtro-estado-inc').value = 'Todos';
+  renderIncidencias();
+});
+document.querySelectorAll('#tabla-incidencias th[data-col-inc]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.colInc;
+    if (filtroInc.ordenCol === col) filtroInc.ordenAsc = !filtroInc.ordenAsc;
+    else { filtroInc.ordenCol = col; filtroInc.ordenAsc = true; }
+    renderIncidencias();
+  });
+});
+
+// ---- Render: todos los casos ---------------------------------------------
+
+function poblarFiltroRf(casos) {
+  const select = document.getElementById('filtro-rf');
+  const actual = select.value;
+  const rfs = Array.from(new Set(casos.map(c => c.rf))).sort((a, b) => numeroRF(a) - numeroRF(b));
+  select.innerHTML = '<option value="Todos">Todos los RF</option>' +
+    rfs.map(rf => `<option value="${esc(rf)}">${esc(rf)}</option>`).join('');
+  select.value = rfs.includes(actual) ? actual : 'Todos';
+}
+
+function poblarFiltroResponsable(casos) {
+  const select = document.getElementById('filtro-responsable');
+  const actual = select.value;
+  const nombres = Array.from(new Set(casos.map(c => c.responsable))).sort((a, b) => a.localeCompare(b));
+  select.innerHTML = '<option value="Todos">Todos los responsables</option>' +
+    nombres.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  select.value = nombres.includes(actual) ? actual : 'Todos';
+}
+
+function filtrarCasos(casos) {
+  const texto = filtro.texto.trim().toLowerCase();
+  return casos.filter(c => {
+    if (estado.modulo !== 'Todos' && numeroModulo(c.modulo) !== estado.modulo) return false;
+    if (filtro.estado !== 'Todos' && c.estado !== filtro.estado) return false;
+    if (filtro.rf !== 'Todos' && c.rf !== filtro.rf) return false;
+    if (filtro.origen !== 'Todos' && c.origen !== filtro.origen) return false;
+    if (filtro.responsable !== 'Todos' && c.responsable !== filtro.responsable) return false;
+    if (texto) {
+      const coincide = c.tc_id.toLowerCase().includes(texto)
+        || c.rf.toLowerCase().includes(texto)
+        || (c.responsable || '').toLowerCase().includes(texto)
+        || (c.errores || []).some(e => e.toLowerCase().includes(texto));
+      if (!coincide) return false;
+    }
+    return true;
+  });
+}
+
+function ordenarCasos(casos) {
+  const dir = filtro.ordenAsc ? 1 : -1;
+  const arr = [...casos];
+  arr.sort((a, b) => {
+    let cmp;
+    switch (filtro.ordenCol) {
+      case 'modulo': cmp = (numeroModulo(a.modulo) || 0) - (numeroModulo(b.modulo) || 0) || compararTC(a.tc_id, b.tc_id); break;
+      case 'rf': cmp = numeroRF(a.rf) - numeroRF(b.rf) || compararTC(a.tc_id, b.tc_id); break;
+      case 'origen': cmp = a.origen.localeCompare(b.origen) || compararTC(a.tc_id, b.tc_id); break;
+      case 'tipo_reporte': cmp = a.tipo_reporte.localeCompare(b.tipo_reporte) || compararTC(a.tc_id, b.tc_id); break;
+      case 'estado': cmp = a.estado.localeCompare(b.estado) || compararTC(a.tc_id, b.tc_id); break;
+      case 'responsable': cmp = a.responsable.localeCompare(b.responsable) || compararTC(a.tc_id, b.tc_id); break;
+      default: cmp = compararTC(a.tc_id, b.tc_id);
+    }
+    return cmp * dir;
+  });
+  return arr;
+}
+
+function actualizarFlechasOrden() {
+  document.querySelectorAll('#tabla-casos th[data-col]').forEach(th => {
+    const arrow = th.querySelector('.arrow');
+    arrow.textContent = th.dataset.col === filtro.ordenCol ? (filtro.ordenAsc ? '▲' : '▼') : '';
+  });
+}
+
+function renderCasos() {
+  if (!ultimoData) return;
+  const filtrados = ordenarCasos(filtrarCasos(ultimoData.casos));
+  const tbody = document.querySelector('#tabla-casos tbody');
+  tbody.innerHTML = filtrados.length ? filtrados.map(c => {
+    const nm = numeroModulo(c.modulo);
+    return `<tr>
+      <td class="mono">${esc(c.tc_id)}</td>
+      <td class="muted">${nm != null ? 'Módulo ' + nm : esc(c.modulo)}</td>
+      <td>${esc(c.rf)}</td>
+      <td>${esc(c.origen)}</td>
+      <td class="muted">${esc(c.tipo_reporte)}</td>
+      <td>${badgeEstado(c.estado)}</td>
+      <td>${esc(c.responsable)}</td>
+      <td>${c.errores && c.errores.length ? '<ul class="err-list">' + c.errores.map(e => `<li class="muted">${esc(e)}</li>`).join('') + '</ul>' : '<span class="muted">—</span>'}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8" class="empty">Sin casos que coincidan con el filtro</td></tr>';
+  document.getElementById('conteo-filtrado').textContent = `${filtrados.length} de ${casosDelModulo().length} casos`;
+  actualizarFlechasOrden();
+}
+
+document.getElementById('buscador').addEventListener('input', e => { filtro.texto = e.target.value; renderCasos(); });
+document.getElementById('filtro-estado').addEventListener('change', e => { filtro.estado = e.target.value; renderCasos(); });
+document.getElementById('filtro-rf').addEventListener('change', e => { filtro.rf = e.target.value; renderCasos(); });
+document.getElementById('filtro-origen').addEventListener('change', e => { filtro.origen = e.target.value; renderCasos(); });
+document.getElementById('filtro-responsable').addEventListener('change', e => { filtro.responsable = e.target.value; renderCasos(); });
+document.getElementById('limpiar-filtros').addEventListener('click', () => {
+  filtro.texto = ''; filtro.estado = 'Todos'; filtro.rf = 'Todos'; filtro.origen = 'Todos'; filtro.responsable = 'Todos';
+  document.getElementById('buscador').value = '';
+  document.getElementById('filtro-estado').value = 'Todos';
+  document.getElementById('filtro-rf').value = 'Todos';
+  document.getElementById('filtro-origen').value = 'Todos';
+  document.getElementById('filtro-responsable').value = 'Todos';
+  renderCasos();
+});
+document.querySelectorAll('#tabla-casos th[data-col]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (filtro.ordenCol === col) filtro.ordenAsc = !filtro.ordenAsc;
+    else { filtro.ordenCol = col; filtro.ordenAsc = true; }
+    renderCasos();
+  });
+});
+
+// ---- Orquestador general --------------------------------------------------
+
+function renderTodo() {
+  if (!ultimoData) return;
+  renderTabs();
+
+  const casos = casosDelModulo();
+  const r = calcularResumen(casos);
+  document.getElementById('total').textContent = r.total;
+  document.getElementById('pct-ok').textContent = r.pct_aprobados + '%';
+  document.getElementById('pct-fail').textContent = r.pct_rechazados + '%';
+  document.getElementById('pct-pend').textContent = r.pct_pendientes + '%';
+  document.getElementById('stackbar').innerHTML = `
+    <div class="seg-ok" style="width:${r.pct_aprobados}%"></div>
+    <div class="seg-fail" style="width:${r.pct_rechazados}%"></div>
+    <div class="seg-pend" style="width:${r.pct_pendientes}%"></div>`;
+
+  const tbodyResp = document.querySelector('#tabla-responsable tbody');
+  const porResp = calcularPorResponsable(casos);
+  tbodyResp.innerHTML = porResp.length ? porResp.map(g => `<tr>
+      <td>${esc(g.responsable)}</td>
+      <td>${g.asignados}</td>
+      <td>${g.ejecutados}</td>
+      <td>${pctBar(g.pct_ejecutado)}</td>
+      <td>${g.aprobados}</td>
+      <td>${g.rechazados}</td>
+      <td>${g.pendientes}</td>
+    </tr>`).join('') : '<tr><td colspan="7" class="empty">Sin datos para este módulo</td></tr>';
+
+  const tbodyRf = document.querySelector('#tabla-rf tbody');
+  const porRf = calcularPorRf(casos);
+  tbodyRf.innerHTML = porRf.length ? porRf.map(g => {
+    const pctOk = g.total ? Math.round(100 * g.aprobados / g.total) : 0;
+    return `<tr>
+      <td>${esc(g.rf)}</td><td>${g.total}</td><td>${g.aprobados}</td><td>${g.rechazados}</td><td>${g.pendientes}</td>
+      <td>${pctBar(pctOk)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty">Sin datos para este módulo</td></tr>';
+
+  renderErrores(casos);
+  poblarFiltroRf(casos);
+  poblarFiltroResponsable(casos);
+  renderCasos();
+  renderTabsRonda();
+  renderTiposError();
+  renderIncidencias();
+
+  document.getElementById('ultima-actualizacion').textContent =
+    'Actualizado: ' + new Date(ultimoData.generado_en).toLocaleString('es-CO');
+  document.getElementById('repos').innerHTML = (ultimoData.repos || []).map(r => {
+    const txt = r.commit ? `${r.repo} · ${r.rama} @ ${r.commit} (${r.fecha_commit.slice(0, 16)})` : r.repo;
+    return `<span class="${r.ok ? '' : 'mal'}">${r.ok ? '✓' : '✗'} ${esc(txt)}${r.error ? ' — ' + esc(r.error) : ''}</span>`;
+  }).join('');
+  document.getElementById('dot').classList.remove('off');
+  document.getElementById('banner').style.display = 'none';
+}
+
+// Sin argumento lee el ultimo escaneo guardado; el boton le pasa el POST que
+// sincroniza los repos y reescanea (responde con el mismo JSON).
+async function cargar(peticion = fetch('/api/data', { cache: 'no-store' })) {
+  try {
+    const res = await peticion;
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    ultimoData = data;
+    poblarFiltroEstadoInc(incidenciasDelModulo());
+    renderTodo();
+  } catch (e) {
+    document.getElementById('dot').classList.add('off');
+    const banner = document.getElementById('banner');
+    banner.textContent = e instanceof TypeError ? 'No se pudo conectar con el servidor (server.py). Reintentando…' : e.message;
+    banner.style.display = 'block';
+  }
+}
+
+const btnActualizar = document.getElementById('btn-actualizar');
+btnActualizar.onclick = async () => {
+  btnActualizar.disabled = true;
+  btnActualizar.textContent = 'Actualizando…';
+  await cargar(fetch('/api/actualizar', { method: 'POST' }));
+  btnActualizar.disabled = false;
+  btnActualizar.textContent = 'Actualizar';
+};
+
+cargar();
+setInterval(cargar, REFRESCO_MS);
+</script>
+</body>
+</html>

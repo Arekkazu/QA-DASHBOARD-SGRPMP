@@ -1,0 +1,18 @@
+__pycache__/
+*.pyc
+
+# Cache del escaneo y repos clonados (en Docker viven en el volumen /data)
+scan_cache.json
+*.tmp
+data/
+
+# Respaldos que deja cargar_incidencias.py y archivos de trabajo
+*.bak
+*.bak[0-9]
+_*.jsonl
+~$*
+
+.env
+.venv/
+.idea/
+.vscode/

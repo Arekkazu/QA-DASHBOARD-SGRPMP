@@ -759,10 +759,20 @@ function renderTiposError() {
 
 // ---- Render: incidencias -------------------------------------------------
 
+// incidencias.csv trae el estado en texto libre (Abierto/Abierta/ABIERTO/
+// Pendiente/Corregido/"Abierta — observación"/Cerrado/Cerrada/cerrado...);
+// para el dashboard se unifica a solo dos valores. "Corregido" cuenta como
+// Cerrado (el defecto ya se solucionó); todo lo demas que no esta
+// explicitamente cerrado (incluido "Pendiente") cuenta como Abierto.
+function normalizarEstadoIncidencia(estado) {
+  const e = (estado || '').trim().toLowerCase();
+  return (e.startsWith('cerrad') || e.startsWith('corregi')) ? 'Cerrado' : 'Abierto';
+}
+
 function poblarFiltroEstadoInc(incidencias) {
   const select = document.getElementById('filtro-estado-inc');
   const actual = select.value;
-  const estados = Array.from(new Set(incidencias.map(i => (i['Estado'] || '').trim()).filter(Boolean))).sort();
+  const estados = Array.from(new Set(incidencias.map(i => normalizarEstadoIncidencia(i['Estado'])))).sort();
   select.innerHTML = '<option value="Todos">Todos los estados</option>' +
     estados.map(e => `<option value="${esc(e)}">${esc(e)}</option>`).join('');
   if (estados.includes(actual)) select.value = actual;
@@ -772,7 +782,7 @@ function filtrarIncidencias(incidencias) {
   const texto = filtroInc.texto.trim().toLowerCase();
   return incidencias.filter(i => {
     if (estado.modulo !== 'Todos' && moduloDeIncidencia(i) !== estado.modulo) return false;
-    if (filtroInc.estado !== 'Todos' && (i['Estado'] || '').trim() !== filtroInc.estado) return false;
+    if (filtroInc.estado !== 'Todos' && normalizarEstadoIncidencia(i['Estado']) !== filtroInc.estado) return false;
     if (texto) {
       const campos = ['ID', 'RF relacionado', 'Categoria del error', 'Equipo responsable', 'Descripcion del error'];
       const coincide = campos.some(campo => (i[campo] || '').toLowerCase().includes(texto));
@@ -786,7 +796,8 @@ function ordenarIncidencias(incidencias) {
   if (!filtroInc.ordenCol) return incidencias;
   const dir = filtroInc.ordenAsc ? 1 : -1;
   const arr = [...incidencias];
-  arr.sort((a, b) => (a[filtroInc.ordenCol] || '').localeCompare(b[filtroInc.ordenCol] || '') * dir);
+  const valor = (i) => filtroInc.ordenCol === 'Estado' ? normalizarEstadoIncidencia(i['Estado']) : (i[filtroInc.ordenCol] || '');
+  arr.sort((a, b) => valor(a).localeCompare(valor(b)) * dir);
   return arr;
 }
 
@@ -808,7 +819,7 @@ function renderIncidencias() {
       <td>${esc(i['Categoria del error'])}</td>
       <td>${esc(i['Equipo responsable'])}</td>
       <td>${esc(i['Severidad'])}</td>
-      <td>${esc(i['Estado'])}</td>
+      <td>${esc(normalizarEstadoIncidencia(i['Estado']))}</td>
       <td>${esc(i['Fecha limite'])}</td>
       <td>${esc(i['Evaluador'] || '—')}</td>
       <td class="muted"><div class="clamp-wrap"><div class="clamp-text">${esc(i['Descripcion del error'])}</div><button type="button" class="leer-mas-btn" onclick="toggleClamp(this)">Leer más</button></div></td>

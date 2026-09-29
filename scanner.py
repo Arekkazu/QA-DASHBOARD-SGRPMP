@@ -602,7 +602,15 @@ def _escanear_raiz(raiz: Path, origen: str, asignaciones: dict, declarados: dict
                     total=parsed["total"],
                     passed=parsed["passed"],
                     failed=parsed["failed"],
-                    errores=parsed["errores"] or ([nota_declarada] if nota_declarada else []),
+                    # Si el TC esta declarado, la lista de errores tambien debe
+                    # venir del veredicto manual (nota_declarada), no del
+                    # escaneo: si no, un TC declarado podia mostrar en la UI
+                    # el mensaje de error crudo de la corrida que la propia
+                    # declaracion esta pisando (ej. TC-M09-G85/G88:
+                    # Estado=Pendiente por decision de QA, pero Errores
+                    # mostraba el fallo real de Cypress -- contradictorio).
+                    errores=([nota_declarada] if nota_declarada else []) if estado_declarado
+                        else parsed["errores"],
                     carpeta=str(tc_dir.relative_to(ROOT)),
                     responsable=asignaciones.get(tc_id, SIN_ASIGNAR),
                     estado_declarado=estado_declarado,

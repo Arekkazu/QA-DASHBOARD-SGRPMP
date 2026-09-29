@@ -84,7 +84,16 @@
   table { width: 100%; border-collapse: collapse; }
   th, td { text-align: left; padding: 8px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: break-word; word-break: break-word; }
 
-  #tabla-incidencias, #tabla-taxonomia-categorias { table-layout: fixed; }
+  #tabla-incidencias, #tabla-taxonomia-categorias, #tabla-casos { table-layout: fixed; }
+  #tabla-casos th:nth-child(1), #tabla-casos td:nth-child(1) { width: 10%; }
+  #tabla-casos th:nth-child(2), #tabla-casos td:nth-child(2) { width: 9%; }
+  #tabla-casos th:nth-child(3), #tabla-casos td:nth-child(3) { width: 8%; }
+  #tabla-casos th:nth-child(4), #tabla-casos td:nth-child(4) { width: 8%; }
+  #tabla-casos th:nth-child(5), #tabla-casos td:nth-child(5) { width: 10%; }
+  #tabla-casos th:nth-child(6), #tabla-casos td:nth-child(6) { width: 9%; }
+  #tabla-casos th:nth-child(7), #tabla-casos td:nth-child(7) { width: 12%; }
+  #tabla-casos th:nth-child(8), #tabla-casos td:nth-child(8) { width: 34%; }
+
   #tabla-incidencias th:nth-child(1), #tabla-incidencias td:nth-child(1) { width: 9%; }
   #tabla-incidencias th:nth-child(2), #tabla-incidencias td:nth-child(2) { width: 7%; }
   #tabla-incidencias th:nth-child(3), #tabla-incidencias td:nth-child(3) { width: 15%; }
@@ -147,6 +156,31 @@
   .detalle-caso .mono { min-width: 108px; }
   .detalle-caso .rf { min-width: 56px; color: var(--text-muted); }
   .detalle-caso .msg { color: var(--text-muted); flex: 1 1 260px; }
+
+  .clamp-wrap { position: relative; }
+  .clamp-text {
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    line-clamp: 3; overflow: hidden;
+  }
+  .clamp-text.expandido { -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
+  .leer-mas-btn {
+    display: none; background: none; border: none; color: var(--accent);
+    font-size: 11px; font-weight: 600; cursor: pointer; padding: 4px 0 0; margin: 0;
+  }
+  .clamp-wrap.con-overflow .leer-mas-btn { display: inline-block; }
+
+  .paginacion {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 10px 16px; border-top: 1px solid var(--border);
+  }
+  .paginacion:empty { display: none; padding: 0; border-top: none; }
+  .paginacion .pag-btn {
+    background: var(--bg); color: var(--text-muted); border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;
+  }
+  .paginacion .pag-btn:hover:not(:disabled) { color: var(--text); }
+  .paginacion .pag-btn:disabled { opacity: .45; cursor: default; }
+  .paginacion .pag-info { color: var(--text-muted); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -175,6 +209,7 @@
     <table id="tabla-responsable"><thead><tr>
       <th>Responsable</th><th>Asignados</th><th>Ejecutados</th><th>% Ejecutado</th><th>Aprobados</th><th>Rechazados</th><th>Pendientes</th>
     </tr></thead><tbody></tbody></table>
+    <div class="paginacion" id="pag-responsable"></div>
   </section>
 
   <section>
@@ -182,6 +217,7 @@
     <table id="tabla-rf"><thead><tr>
       <th>RF</th><th>Total</th><th>Aprobados</th><th>Rechazados</th><th>Pendientes</th><th>% Aprobado</th>
     </tr></thead><tbody></tbody></table>
+    <div class="paginacion" id="pag-rf"></div>
   </section>
 
   <section>
@@ -189,6 +225,7 @@
     <table id="tabla-errores"><thead><tr>
       <th>Veces</th><th>Qué pasó</th><th>Detalle técnico</th><th>Caso</th>
     </tr></thead><tbody></tbody></table>
+    <div class="paginacion" id="pag-errores"></div>
   </section>
 
   <section>
@@ -197,6 +234,7 @@
     <table id="tabla-tipos-error"><thead><tr>
       <th>Categoría del error</th><th>Cantidad</th><th>% del total</th><th>Distribución</th>
     </tr></thead><tbody></tbody></table>
+    <div class="paginacion" id="pag-tiposError"></div>
   </section>
 
   <section>
@@ -241,6 +279,7 @@
       <th>Evaluador</th>
       <th>Descripción</th>
     </tr></thead><tbody></tbody></table>
+    <div class="paginacion" id="pag-incidencias"></div>
   </section>
 
   <section>
@@ -273,6 +312,7 @@
       <th data-col="responsable">Responsable <span class="arrow"></span></th>
       <th>Errores</th>
     </tr></thead><tbody></tbody></table>
+    <div class="paginacion" id="pag-casos"></div>
   </section>
 </div>
 
@@ -281,6 +321,38 @@ const REFRESCO_MS = 5000;
 
 let ultimoData = null;
 const estado = { modulo: 'Todos', rondaTipos: 'Todos' };
+
+// ---- Paginacion (10 filas por pagina en cada tabla) ----------------------
+
+const FILAS_POR_PAGINA = 10;
+const paginaActual = { responsable: 1, rf: 1, errores: 1, tiposError: 1, incidencias: 1, casos: 1 };
+
+function paginar(id, filas) {
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / FILAS_POR_PAGINA));
+  if (paginaActual[id] > totalPaginas) paginaActual[id] = totalPaginas;
+  if (paginaActual[id] < 1) paginaActual[id] = 1;
+  const inicio = (paginaActual[id] - 1) * FILAS_POR_PAGINA;
+  return filas.slice(inicio, inicio + FILAS_POR_PAGINA);
+}
+
+function renderPaginacion(id, totalFilas) {
+  const cont = document.getElementById('pag-' + id);
+  if (!cont) return;
+  if (totalFilas <= FILAS_POR_PAGINA) { cont.innerHTML = ''; return; }
+  const totalPaginas = Math.max(1, Math.ceil(totalFilas / FILAS_POR_PAGINA));
+  const pagina = paginaActual[id];
+  cont.innerHTML = `
+    <button type="button" class="pag-btn" data-pag-id="${id}" data-pag-dir="-1" ${pagina <= 1 ? 'disabled' : ''}>‹ Anterior</button>
+    <span class="pag-info">Página ${pagina} de ${totalPaginas} · ${totalFilas} filas</span>
+    <button type="button" class="pag-btn" data-pag-id="${id}" data-pag-dir="1" ${pagina >= totalPaginas ? 'disabled' : ''}>Siguiente ›</button>`;
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.pag-btn');
+  if (!btn) return;
+  paginaActual[btn.dataset.pagId] += Number(btn.dataset.pagDir);
+  renderTodo();
+});
 
 // Numero ordinal de ronda de evaluacion -> etiqueta para el usuario.
 // ronda_evaluacion lo calcula scanner.py (_ronda_incidencia) a partir de
@@ -330,6 +402,23 @@ function pctBar(pct) {
 
 function esc(s) {
   return (s ?? '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---- Texto largo con "Leer más" ------------------------------------------
+
+function initClamps(root) {
+  (root || document).querySelectorAll('.clamp-wrap').forEach(wrap => {
+    const text = wrap.querySelector('.clamp-text');
+    if (!text) return;
+    wrap.classList.toggle('con-overflow', text.scrollHeight - text.clientHeight > 2);
+  });
+}
+
+function toggleClamp(btn) {
+  const wrap = btn.closest('.clamp-wrap');
+  const text = wrap.querySelector('.clamp-text');
+  const expandido = text.classList.toggle('expandido');
+  btn.textContent = expandido ? 'Leer menos' : 'Leer más';
 }
 
 // ---- Datos derivados del modulo seleccionado (pestañas) ----------------
@@ -490,6 +579,7 @@ function renderTabs() {
     btn.addEventListener('click', () => {
       const v = btn.dataset.val;
       estado.modulo = v === 'Todos' ? 'Todos' : parseInt(v, 10);
+      Object.keys(paginaActual).forEach(k => paginaActual[k] = 1);
       renderTodo();
     });
   });
@@ -502,9 +592,12 @@ function renderErrores(casos) {
   const tbody = document.querySelector('#tabla-errores tbody');
   if (!errores.length) {
     tbody.innerHTML = '<tr><td colspan="4" class="empty">Sin errores registrados</td></tr>';
+    renderPaginacion('errores', 0);
     return;
   }
-  tbody.innerHTML = errores.map(e => {
+  const erroresPagina = paginar('errores', errores);
+  renderPaginacion('errores', errores.length);
+  tbody.innerHTML = erroresPagina.map(e => {
     const abierto = patronesExpandidos.has(e.patron);
     const filaPatron = `<tr class="fila-patron" data-key="${esc(e.patron)}">
         <td><strong>${e.veces}×</strong></td>
@@ -628,6 +721,7 @@ function renderTabsRonda() {
     btn.addEventListener('click', () => {
       const v = btn.dataset.val;
       estado.rondaTipos = v === 'Todos' ? 'Todos' : parseInt(v, 10);
+      paginaActual.tiposError = 1;
       renderTiposError();
       renderTabsRonda();
     });
@@ -647,8 +741,9 @@ function renderTiposError() {
   });
   const total = incidencias.length;
   const filas = Array.from(conteos.entries()).sort((a, b) => b[1] - a[1]);
+  const filasPagina = paginar('tiposError', filas);
   const tbody = document.querySelector('#tabla-tipos-error tbody');
-  tbody.innerHTML = filas.length ? filas.map(([cat, n]) => {
+  tbody.innerHTML = filasPagina.length ? filasPagina.map(([cat, n]) => {
     const pct = total ? (n / total * 100) : 0;
     const etiqueta = ETIQUETAS_CATEGORIA_ERROR[cat] || cat;
     const claseFila = cat === 'SIN_CLASIFICAR' ? ' style="color:var(--pend);"' : '';
@@ -659,6 +754,7 @@ function renderTiposError() {
       <td><span class="mini-bar"><div style="width:${pct}%"></div></span></td>
     </tr>`;
   }).join('') : '<tr><td colspan="4" class="empty">Sin incidencias registradas</td></tr>';
+  renderPaginacion('tiposError', filas.length);
 }
 
 // ---- Render: incidencias -------------------------------------------------
@@ -704,8 +800,9 @@ function actualizarFlechasOrdenInc() {
 function renderIncidencias() {
   if (!ultimoData) return;
   const filtradas = ordenarIncidencias(filtrarIncidencias(ultimoData.incidencias));
+  const filtradasPagina = paginar('incidencias', filtradas);
   const tbody = document.querySelector('#tabla-incidencias tbody');
-  tbody.innerHTML = filtradas.length ? filtradas.map(i => `<tr>
+  tbody.innerHTML = filtradasPagina.length ? filtradasPagina.map(i => `<tr>
       <td class="mono">${esc(i['ID'])}</td>
       <td>${esc(i['RF relacionado'])}</td>
       <td>${esc(i['Categoria del error'])}</td>
@@ -714,18 +811,21 @@ function renderIncidencias() {
       <td>${esc(i['Estado'])}</td>
       <td>${esc(i['Fecha limite'])}</td>
       <td>${esc(i['Evaluador'] || '—')}</td>
-      <td class="muted">${esc((i['Descripcion del error']||'').slice(0,140))}${(i['Descripcion del error']||'').length>140?'…':''}</td>
+      <td class="muted"><div class="clamp-wrap"><div class="clamp-text">${esc(i['Descripcion del error'])}</div><button type="button" class="leer-mas-btn" onclick="toggleClamp(this)">Leer más</button></div></td>
     </tr>`).join('') : '<tr><td colspan="9" class="empty">Sin incidencias que coincidan con el filtro</td></tr>';
   document.getElementById('conteo-filtrado-inc').textContent = `${filtradas.length} de ${incidenciasDelModulo().length} incidencias`;
   actualizarFlechasOrdenInc();
+  initClamps(tbody);
+  renderPaginacion('incidencias', filtradas.length);
 }
 
-document.getElementById('buscador-inc').addEventListener('input', e => { filtroInc.texto = e.target.value; renderIncidencias(); });
-document.getElementById('filtro-estado-inc').addEventListener('change', e => { filtroInc.estado = e.target.value; renderIncidencias(); });
+document.getElementById('buscador-inc').addEventListener('input', e => { filtroInc.texto = e.target.value; paginaActual.incidencias = 1; renderIncidencias(); });
+document.getElementById('filtro-estado-inc').addEventListener('change', e => { filtroInc.estado = e.target.value; paginaActual.incidencias = 1; renderIncidencias(); });
 document.getElementById('limpiar-filtros-inc').addEventListener('click', () => {
   filtroInc.texto = ''; filtroInc.estado = 'Todos';
   document.getElementById('buscador-inc').value = '';
   document.getElementById('filtro-estado-inc').value = 'Todos';
+  paginaActual.incidencias = 1;
   renderIncidencias();
 });
 document.querySelectorAll('#tabla-incidencias th[data-col-inc]').forEach(th => {
@@ -733,6 +833,7 @@ document.querySelectorAll('#tabla-incidencias th[data-col-inc]').forEach(th => {
     const col = th.dataset.colInc;
     if (filtroInc.ordenCol === col) filtroInc.ordenAsc = !filtroInc.ordenAsc;
     else { filtroInc.ordenCol = col; filtroInc.ordenAsc = true; }
+    paginaActual.incidencias = 1;
     renderIncidencias();
   });
 });
@@ -805,8 +906,9 @@ function actualizarFlechasOrden() {
 function renderCasos() {
   if (!ultimoData) return;
   const filtrados = ordenarCasos(filtrarCasos(ultimoData.casos));
+  const filtradosPagina = paginar('casos', filtrados);
   const tbody = document.querySelector('#tabla-casos tbody');
-  tbody.innerHTML = filtrados.length ? filtrados.map(c => {
+  tbody.innerHTML = filtradosPagina.length ? filtradosPagina.map(c => {
     const nm = numeroModulo(c.modulo);
     return `<tr>
       <td class="mono">${esc(c.tc_id)}</td>
@@ -816,18 +918,20 @@ function renderCasos() {
       <td class="muted">${esc(c.tipo_reporte)}</td>
       <td>${badgeEstado(c.estado)}</td>
       <td>${esc(c.responsable)}</td>
-      <td>${c.errores && c.errores.length ? '<ul class="err-list">' + c.errores.map(e => `<li class="muted">${esc(e)}</li>`).join('') + '</ul>' : '<span class="muted">—</span>'}</td>
+      <td>${c.errores && c.errores.length ? `<div class="clamp-wrap"><div class="clamp-text"><ul class="err-list">${c.errores.map(e => `<li class="muted">${esc(e)}</li>`).join('')}</ul></div><button type="button" class="leer-mas-btn" onclick="toggleClamp(this)">Leer más</button></div>` : '<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="8" class="empty">Sin casos que coincidan con el filtro</td></tr>';
   document.getElementById('conteo-filtrado').textContent = `${filtrados.length} de ${casosDelModulo().length} casos`;
   actualizarFlechasOrden();
+  initClamps(tbody);
+  renderPaginacion('casos', filtrados.length);
 }
 
-document.getElementById('buscador').addEventListener('input', e => { filtro.texto = e.target.value; renderCasos(); });
-document.getElementById('filtro-estado').addEventListener('change', e => { filtro.estado = e.target.value; renderCasos(); });
-document.getElementById('filtro-rf').addEventListener('change', e => { filtro.rf = e.target.value; renderCasos(); });
-document.getElementById('filtro-origen').addEventListener('change', e => { filtro.origen = e.target.value; renderCasos(); });
-document.getElementById('filtro-responsable').addEventListener('change', e => { filtro.responsable = e.target.value; renderCasos(); });
+document.getElementById('buscador').addEventListener('input', e => { filtro.texto = e.target.value; paginaActual.casos = 1; renderCasos(); });
+document.getElementById('filtro-estado').addEventListener('change', e => { filtro.estado = e.target.value; paginaActual.casos = 1; renderCasos(); });
+document.getElementById('filtro-rf').addEventListener('change', e => { filtro.rf = e.target.value; paginaActual.casos = 1; renderCasos(); });
+document.getElementById('filtro-origen').addEventListener('change', e => { filtro.origen = e.target.value; paginaActual.casos = 1; renderCasos(); });
+document.getElementById('filtro-responsable').addEventListener('change', e => { filtro.responsable = e.target.value; paginaActual.casos = 1; renderCasos(); });
 document.getElementById('limpiar-filtros').addEventListener('click', () => {
   filtro.texto = ''; filtro.estado = 'Todos'; filtro.rf = 'Todos'; filtro.origen = 'Todos'; filtro.responsable = 'Todos';
   document.getElementById('buscador').value = '';
@@ -835,6 +939,7 @@ document.getElementById('limpiar-filtros').addEventListener('click', () => {
   document.getElementById('filtro-rf').value = 'Todos';
   document.getElementById('filtro-origen').value = 'Todos';
   document.getElementById('filtro-responsable').value = 'Todos';
+  paginaActual.casos = 1;
   renderCasos();
 });
 document.querySelectorAll('#tabla-casos th[data-col]').forEach(th => {
@@ -842,6 +947,7 @@ document.querySelectorAll('#tabla-casos th[data-col]').forEach(th => {
     const col = th.dataset.col;
     if (filtro.ordenCol === col) filtro.ordenAsc = !filtro.ordenAsc;
     else { filtro.ordenCol = col; filtro.ordenAsc = true; }
+    paginaActual.casos = 1;
     renderCasos();
   });
 });
@@ -865,7 +971,8 @@ function renderTodo() {
 
   const tbodyResp = document.querySelector('#tabla-responsable tbody');
   const porResp = calcularPorResponsable(casos);
-  tbodyResp.innerHTML = porResp.length ? porResp.map(g => `<tr>
+  const porRespPagina = paginar('responsable', porResp);
+  tbodyResp.innerHTML = porRespPagina.length ? porRespPagina.map(g => `<tr>
       <td>${esc(g.responsable)}</td>
       <td>${g.asignados}</td>
       <td>${g.ejecutados}</td>
@@ -874,16 +981,19 @@ function renderTodo() {
       <td>${g.rechazados}</td>
       <td>${g.pendientes}</td>
     </tr>`).join('') : '<tr><td colspan="7" class="empty">Sin datos para este módulo</td></tr>';
+  renderPaginacion('responsable', porResp.length);
 
   const tbodyRf = document.querySelector('#tabla-rf tbody');
   const porRf = calcularPorRf(casos);
-  tbodyRf.innerHTML = porRf.length ? porRf.map(g => {
+  const porRfPagina = paginar('rf', porRf);
+  tbodyRf.innerHTML = porRfPagina.length ? porRfPagina.map(g => {
     const pctOk = g.total ? Math.round(100 * g.aprobados / g.total) : 0;
     return `<tr>
       <td>${esc(g.rf)}</td><td>${g.total}</td><td>${g.aprobados}</td><td>${g.rechazados}</td><td>${g.pendientes}</td>
       <td>${pctBar(pctOk)}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="6" class="empty">Sin datos para este módulo</td></tr>';
+  renderPaginacion('rf', porRf.length);
 
   renderErrores(casos);
   poblarFiltroRf(casos);

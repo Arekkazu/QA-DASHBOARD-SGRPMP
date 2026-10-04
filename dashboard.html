@@ -387,7 +387,10 @@ function numeroModulo(m) {
 }
 // Toda incidencia sigue el patron INC-M0<modulo>-... en este proyecto.
 function moduloDeIncidencia(inc) {
-  const match = /INC-M0(\d+)-/i.exec((inc && inc['ID']) || '');
+  // Los IDs a veces traen guiones tipograficos (U+2011, U+2013...) o el
+  // prefijo TC-/NC- en vez de INC-: se normalizan para no perder la incidencia.
+  const id = ((inc && inc['ID']) || '').replace(/[\u2010-\u2015\u2212]/g, '-');
+  const match = /(?:INC|TC|NC)-M0(\d+)-/i.exec(id);
   return match ? parseInt(match[1], 10) : null;
 }
 
@@ -706,6 +709,63 @@ function categoriaBase(cat) {
 // "Incidencias por tipo de error": sin esto, las reevaluaciones se suman a
 // las incidencias originales y el conteo de errores nunca baja, aunque el
 // defecto ya se haya corregido y solo quede la incidencia de confirmación.
+// Una incidencia cuenta en la ronda N si se trabajo en esa ronda, o si viene
+// de una ronda anterior y sigue sin cerrar (sigue viva en la N).
+function estaCerrada(inc) {
+  return /^(cerrad|corregid|resuelt)/i.test((inc['Estado'] || '').trim());
+}
+function vivaEnRonda(inc, ronda) {
+  const r = inc['ronda_evaluacion'] || 1;
+  return r === ronda || (r < ronda && !estaCerrada(inc));
+}
+
+// Clasifica UN mensaje de error de un reporte de prueba en uno de los codigos
+// de ETIQUETAS_CATEGORIA_ERROR. Es heuristica sobre texto libre: el orden de
+// las reglas importa (lo mas especifico primero) y lo que no calza queda en
+// SIN_CLASIFICAR para que QA lo revise en vez de forzarlo a un codigo.
+const REGLAS_ERROR_REPORTE = [
+  ['FRONT_PWA', /offline|service ?worker|manifest/],
+  ['UI_ACCESIBILIDAD', /\baxe\b|accesib|viewport|contraste|\baria\b|wcag/],
+  ['FRONT_RENDER', /bot[oó]n|redirecci[oó]n|asistente|se muestra|renderiz|descarga no disparada/],
+  ['SEGURIDAD', /texto plano|owasp|\bapi\d\b|rate.?limit|\b429\b|subscribe|suback|credencial/],
+  ['AUTORIZACION', /\b403\b|forbidden|permiso/],
+  ['AUTENTICACION', /\b401\b|unauthorized|sesi[oó]n/],
+  ['INFRAESTRUC', /\b50[0-4]\b|internal server|timed out|timeout|econn|tard[oó]/],
+  ['AUDITORIA', /audit|bit[aá]cora|trazab|retenci[oó]n|trigger ni revoke/],
+  ['UNICIDAD', /\b409\b|\b412\b|duplicad|conflicto/],
+  ['VAL_ENTRADA', /\b400\b|\b422\b|invalid|captcha|validaci[oó]n/],
+  ['HTTP_COM', /status code|\b40[45]\b|\b20[0-4]\b|content-type|header|contrato|no conforme|no esta declarado/],
+  ['FUNCIONAL', /to (deeply )?equal|to exist|to have property|to not have property|be above|to match|no refleja|no aument|no se genero/],
+];
+
+function categoriaDeMensaje(msg) {
+  const txt = normalizarTextoCategoria(msg).toLowerCase();
+  for (const [codigo, patron] of REGLAS_ERROR_REPORTE) {
+    if (patron.test(txt)) return codigo;
+  }
+  return 'SIN_CLASIFICAR';
+}
+
+// Un caso rechazado cuenta UNA vez, en la categoria que mas se repite entre
+// sus mensajes de error (empate: la del primer mensaje).
+function categoriaDeCaso(caso) {
+  const votos = new Map();
+  (caso.errores || []).forEach(m => {
+    const cat = categoriaDeMensaje(m);
+    votos.set(cat, (votos.get(cat) || 0) + 1);
+  });
+  let mejor = 'SIN_CLASIFICAR', max = 0;
+  for (const [cat, n] of votos) if (n > max) { mejor = cat; max = n; }
+  return mejor;
+}
+
+// "Todas las rondas" se deduce de los reportes de prueba (casos Rechazados
+// hoy); las pestañas de ronda siguen leyendo incidencias.csv porque los
+// reportes no dicen en que ronda fallo cada caso.
+function casosRechazadosDelModulo() {
+  return casosDelModulo().filter(c => c.estado === 'Rechazado');
+}
+
 function renderTabsRonda() {
   const nav = document.getElementById('tabs-ronda-tipos');
   const incidencias = incidenciasDelModulo();
@@ -714,7 +774,7 @@ function renderTabsRonda() {
   const items = [{ label: 'Todas las rondas', val: 'Todos' }, ...rondas.map(r => ({ label: etiquetaRonda(r), val: r }))];
   nav.innerHTML = items.map(it => {
     const activo = estado.rondaTipos === it.val;
-    const n = (it.val === 'Todos' ? incidencias : incidencias.filter(i => (i['ronda_evaluacion'] || 1) === it.val)).length;
+    const n = (it.val === 'Todos' ? casosRechazadosDelModulo() : incidencias.filter(i => vivaEnRonda(i, it.val))).length;
     return `<button type="button" class="modtab ${activo ? 'activo' : ''}" data-val="${esc(it.val)}">${esc(it.label)}<span class="n">${n}</span></button>`;
   }).join('');
   nav.querySelectorAll('.modtab').forEach(btn => {
@@ -730,16 +790,23 @@ function renderTabsRonda() {
 
 function renderTiposError() {
   if (!ultimoData) return;
-  let incidencias = incidenciasDelModulo();
-  if (estado.rondaTipos !== 'Todos') {
-    incidencias = incidencias.filter(i => (i['ronda_evaluacion'] || 1) === estado.rondaTipos);
-  }
   const conteos = new Map();
-  incidencias.forEach(i => {
-    const cat = categoriaBase(i['Categoria del error']);
-    conteos.set(cat, (conteos.get(cat) || 0) + 1);
-  });
-  const total = incidencias.length;
+  let total;
+  if (estado.rondaTipos === 'Todos') {
+    const rechazados = casosRechazadosDelModulo();
+    rechazados.forEach(c => {
+      const cat = categoriaDeCaso(c);
+      conteos.set(cat, (conteos.get(cat) || 0) + 1);
+    });
+    total = rechazados.length;
+  } else {
+    const incidencias = incidenciasDelModulo().filter(i => vivaEnRonda(i, estado.rondaTipos));
+    incidencias.forEach(i => {
+      const cat = categoriaBase(i['Categoria del error']);
+      conteos.set(cat, (conteos.get(cat) || 0) + 1);
+    });
+    total = incidencias.length;
+  }
   const filas = Array.from(conteos.entries()).sort((a, b) => b[1] - a[1]);
   const filasPagina = paginar('tiposError', filas);
   const tbody = document.querySelector('#tabla-tipos-error tbody');

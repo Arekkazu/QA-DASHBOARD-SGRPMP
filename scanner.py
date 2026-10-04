@@ -629,7 +629,8 @@ _RONDA_VERSION_SUELTA = re.compile(
     r"|\bv(\d+)\s+ejecutad"
     r"|reevaluaci[oó]n\s*v?(\d+)\b"
     r"|revisi[oó]n\s*(\d+)\b"
-    r"|-\s*v(\d+)\b",
+    r"|-\s*v(\d+)\b"
+    r"|\b(?:detectad\w*|reproducid\w*|observad\w*)\s+en\s+v(\d+)\b",
     re.IGNORECASE,
 )
 

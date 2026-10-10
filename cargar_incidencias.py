@@ -17,7 +17,7 @@ Normalizaciones (todas se listan en el informe, ninguna toca el texto de
     y un ID sin prefijo INC (p. ej. "TC-M02-G08") pasa a "INC-M02-?-G08", igual
     que la convencion "INC-M02-?-g35" que ya usa el equipo.
   - Modulo: se deriva del ID (el panel agrupa por el patron INC-M0<n>-).
-  - Estado: se lleva a la lista del manual (Abierto / Corregido / Descartado).
+  - Estado: se lleva a la Abierto / Cerrado.
   - Una incidencia con el mismo ID que otra ya cargada la reemplaza.
 """
 import argparse
@@ -34,13 +34,14 @@ COLUMNAS = ["Modulo", "ID", "Descripcion del error", "RF relacionado", "Categori
             "Equipo responsable", "Severidad", "Tiempo maximo de solucion", "Fecha deteccion",
             "Fecha limite", "Estado", "Fecha correccion real", "Evidencia / Notas", "Evaluador"]
 
-# Estados de la hoja -> lista cerrada del manual (seccion 6.5).
+# Estados de la hoja -> solo dos valores: Abierto / Cerrado.
 ESTADOS = {
     "abierto": "Abierto", "abierta": "Abierto", "pendiente": "Abierto",
+    "pendiente / bloqueado": "Abierto",
     "rechazado de nuevo": "Abierto",   # reabierta tras una retroprueba fallida
     "": "Abierto",                     # sin estado = aun sin trabajar
-    "corregido": "Corregido", "cerrado": "Corregido", "cerrada": "Corregido",
-    "descartado": "Descartado", "descartada": "Descartado",
+    "corregido": "Cerrado", "cerrado": "Cerrado", "cerrada": "Cerrado",
+    "descartado": "Cerrado", "descartada": "Cerrado",
 }
 
 

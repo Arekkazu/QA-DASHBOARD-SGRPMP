@@ -16,3 +16,4 @@ _*.jsonl
 .venv/
 .idea/
 .vscode/
+*.bak*

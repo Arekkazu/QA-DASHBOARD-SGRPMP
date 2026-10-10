@@ -296,6 +296,41 @@ def _parse_cypress_consola(texto: str) -> Optional[dict]:
     return {"total": total, "passed": passed, "failed": failed, "errores": errores}
 
 
+_VEREDICTO_NARRATIVO = re.compile(
+    r"^[ \t]*(?:(?:resultado(?:\s+global)?|clasificaci[oó]n)[^:\n]*:"
+    r"|TC-M\d+-G\d+(?:\s+global)?\s*:?)\s*"
+    r"(aprobado|rechazado|desaprobado|bloqueado)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _parse_veredicto_narrativo(texto: str) -> Optional[dict]:
+    """Acta de ejecucion en texto libre (G82/G90/G94 rev2-rev4): no trae
+    conteo de pruebas, solo una linea "Resultado: APROBADO", "Clasificacion
+    179: RECHAZADO" o "RESULTADO GLOBAL G90: BLOQUEADO". Si hay una linea
+    "global" manda esa; si no, el peor veredicto del archivo (Rechazado >
+    Bloqueado > Aprobado). BLOQUEADO no cuenta como ejecutado: total=0 lo
+    deja en Pendiente."""
+    encontrados = [(m.group(0), m.group(1).lower()) for m in _VEREDICTO_NARRATIVO.finditer(texto)]
+    if not encontrados:
+        return None
+    globales = [v for linea, v in encontrados if re.search(r"global", linea, re.IGNORECASE)]
+    candidatos = globales or [v for _, v in encontrados]
+    if any(v in ("rechazado", "desaprobado") for v in candidatos):
+        veredicto = "rechazado"
+    elif "bloqueado" in candidatos:
+        veredicto = "bloqueado"
+    else:
+        veredicto = "aprobado"
+    if veredicto == "aprobado":
+        return {"total": 1, "passed": 1, "failed": 0, "errores": []}
+    if veredicto == "rechazado":
+        return {"total": 1, "passed": 0, "failed": 1,
+                "errores": ["Veredicto del acta de ejecucion: RECHAZADO (ver el .txt de la corrida)"]}
+    return {"total": 0, "passed": 0, "failed": 0,
+            "errores": ["Veredicto del acta de ejecucion: BLOQUEADO (ver el .txt de la corrida)"]}
+
+
 def _parse_junit_xml(texto: str) -> Optional[dict]:
     """Reporte JUnit XML de pytest (--junitxml), formato <testsuites><testsuite
     tests=".." failures=".." errors=".." skipped="..">. Un test 'skipped' (ej.
@@ -394,9 +429,13 @@ _PATRONES_RANGO_REINTENTO = [
     re.compile(r"reintento\s*(\d*)", re.IGNORECASE),
     re.compile(r"retest\s*(\d*)", re.IGNORECASE),
     re.compile(r"retry\s*(\d*)", re.IGNORECASE),
-    re.compile(r"\bv(\d+)\.(\d+)\b", re.IGNORECASE),
+    # v2.0, v3.0 y tambien v3 suelto; sin letra/digito antes, asi "_v2.0" y "-v3" cuentan.
+    re.compile(r"(?<![a-z0-9])v(\d+)(?:\.(\d+))?(?!\d)", re.IGNORECASE),
     re.compile(r"fase\s*(\d+)", re.IGNORECASE),
     re.compile(r"parte\s*(\d+)", re.IGNORECASE),
+    # rev2 / rev3 / rev4 (ej. TC-M09-G94_179_rev4_test.json): sin letra antes
+    # para no confundir con "review" ni "reeval".
+    re.compile(r"(?<![a-z])rev\s*(\d+)", re.IGNORECASE),
 ]
 
 
@@ -420,7 +459,7 @@ def _rango_version(p: Path) -> int:
             rango = max(rango, 1000)
         elif patron is _PATRONES_RANGO_REINTENTO[4]:
             major, minor = m.groups()
-            rango = max(rango, int(major) * 100 + int(minor))
+            rango = max(rango, int(major) * 100 + int(minor or 0))
         else:
             n = m.group(1)
             rango = max(rango, int(n) if n else 1)
@@ -500,6 +539,7 @@ _PARSERS_POR_EXT = {
     ],
     ".txt": [
         ("cypress-consola", _parse_cypress_consola),
+        ("acta-narrativa", _parse_veredicto_narrativo),
     ],
     ".xml": [
         ("junit-xml", _parse_junit_xml),

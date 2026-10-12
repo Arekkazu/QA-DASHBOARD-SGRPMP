@@ -759,11 +759,18 @@ function categoriaDeCaso(caso) {
   return mejor;
 }
 
-// "Todas las rondas" se deduce de los reportes de prueba (casos Rechazados
-// hoy); las pestañas de ronda siguen leyendo incidencias.csv porque los
-// reportes no dicen en que ronda fallo cada caso.
-function casosRechazadosDelModulo() {
-  return casosDelModulo().filter(c => c.estado === 'Rechazado');
+// "Todas las rondas" y cada pestaña de ronda leen la MISMA fuente
+// (incidencias.csv); "Todas" es el acumulado (suma) de las rondas.
+
+// Incidencias de una ronda; 'Todos' = acumulado: la suma de todas las rondas
+// (una incidencia que sigue abierta en la ronda siguiente cuenta en cada una).
+function rondasDelModulo() {
+  return Array.from(new Set(incidenciasDelModulo().map(i => i['ronda_evaluacion'] || 1))).sort((a, b) => a - b);
+}
+function incidenciasDeRonda(ronda) {
+  const incidencias = incidenciasDelModulo();
+  if (ronda === 'Todos') return rondasDelModulo().flatMap(r => incidencias.filter(i => vivaEnRonda(i, r)));
+  return incidencias.filter(i => vivaEnRonda(i, ronda));
 }
 
 function renderTabsRonda() {
@@ -774,7 +781,7 @@ function renderTabsRonda() {
   const items = [{ label: 'Todas las rondas', val: 'Todos' }, ...rondas.map(r => ({ label: etiquetaRonda(r), val: r }))];
   nav.innerHTML = items.map(it => {
     const activo = estado.rondaTipos === it.val;
-    const n = (it.val === 'Todos' ? casosRechazadosDelModulo() : incidencias.filter(i => vivaEnRonda(i, it.val))).length;
+    const n = incidenciasDeRonda(it.val).length;
     return `<button type="button" class="modtab ${activo ? 'activo' : ''}" data-val="${esc(it.val)}">${esc(it.label)}<span class="n">${n}</span></button>`;
   }).join('');
   nav.querySelectorAll('.modtab').forEach(btn => {
@@ -792,21 +799,12 @@ function renderTiposError() {
   if (!ultimoData) return;
   const conteos = new Map();
   let total;
-  if (estado.rondaTipos === 'Todos') {
-    const rechazados = casosRechazadosDelModulo();
-    rechazados.forEach(c => {
-      const cat = categoriaDeCaso(c);
-      conteos.set(cat, (conteos.get(cat) || 0) + 1);
-    });
-    total = rechazados.length;
-  } else {
-    const incidencias = incidenciasDelModulo().filter(i => vivaEnRonda(i, estado.rondaTipos));
-    incidencias.forEach(i => {
-      const cat = categoriaBase(i['Categoria del error']);
-      conteos.set(cat, (conteos.get(cat) || 0) + 1);
-    });
-    total = incidencias.length;
-  }
+  const incidencias = incidenciasDeRonda(estado.rondaTipos);
+  incidencias.forEach(i => {
+    const cat = categoriaBase(i['Categoria del error']);
+    conteos.set(cat, (conteos.get(cat) || 0) + 1);
+  });
+  total = incidencias.length;
   const filas = Array.from(conteos.entries()).sort((a, b) => b[1] - a[1]);
   const filasPagina = paginar('tiposError', filas);
   const tbody = document.querySelector('#tabla-tipos-error tbody');

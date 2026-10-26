@@ -52,6 +52,7 @@ FRONTEND_TESTS = ROOT / "SGPMP-FRONT-END-PWA" / "testing" / "test_testing"
 INCIDENCIAS_CSV = Path(__file__).resolve().parent / "incidencias.csv"
 ASIGNACIONES_CSV = Path(__file__).resolve().parent / "asignaciones.csv"
 DECLARADOS_CSV = Path(__file__).resolve().parent / "declarados_sin_evidencia.csv"
+EVALUADORES_CSV = Path(__file__).resolve().parent / "evaluadores.csv"
 SIN_ASIGNAR = "Sin asignar"
 
 TC_DIR_RE = re.compile(r"^TC-M0(\d+)-(G?)(\d+)$", re.IGNORECASE)
@@ -726,12 +727,32 @@ def _leer_incidencias() -> tuple[list, dict]:
     for fila in filas:
         fila.setdefault("fuente", "CSV")
     filas += de_taiga
+    alias = _leer_alias_personas()
+    for fila in filas:
+        fila["Evaluador"] = _nombre_oficial(fila.get("Evaluador", ""), alias)
     for fila in filas:
         fila["ronda_evaluacion"] = _ronda_incidencia(
             fila.get("ID", ""),
             fila.get("Evidencia / Notas", "") if fila["fuente"] == "CSV" else fila.get("texto_clasificacion", ""),
         )
     return filas, estado_taiga
+
+
+def _leer_alias_personas() -> dict:
+    """evaluadores.csv: Alias -> Nombre oficial. Une las variantes con que
+    QA escribe a la misma persona (Daniela / Daniela Castillo / Daniela
+    Castillo Vargas). La comparacion ignora mayusculas, tildes y espacios
+    sobrantes, asi que 'laura ' y 'LAURA' no necesitan filas propias."""
+    if not EVALUADORES_CSV.exists():
+        return {}
+    with EVALUADORES_CSV.open(encoding="utf-8-sig", newline="") as f:
+        return {taiga._norm(fila["Alias"]): fila["Nombre"].strip()
+                for fila in csv.DictReader(f) if fila.get("Alias") and fila.get("Nombre")}
+
+
+def _nombre_oficial(nombre: str, alias: dict) -> str:
+    limpio = re.sub(r"\s+", " ", nombre or "").strip()
+    return alias.get(taiga._norm(limpio), limpio)
 
 
 def _leer_asignaciones() -> dict:
@@ -742,8 +763,9 @@ def _leer_asignaciones() -> dict:
         return {}
     with ASIGNACIONES_CSV.open(encoding="utf-8-sig", newline="") as f:
         filas = list(csv.DictReader(f))
+    alias = _leer_alias_personas()
     return {
-        _normalizar_tc_id(fila["TC"].strip()): fila["Responsable"].strip()
+        _normalizar_tc_id(fila["TC"].strip()): _nombre_oficial(fila["Responsable"], alias)
         for fila in filas
         if fila.get("TC")
     }

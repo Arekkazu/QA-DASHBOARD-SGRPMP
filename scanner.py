@@ -42,6 +42,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import taiga
+
 # Local: los repos viven al lado de qa-dashboard/. En Docker/Dokploy REPOS_DIR
 # apunta al volumen persistente donde server.py los clona (rama test).
 ROOT = Path(os.environ.get("REPOS_DIR") or Path(__file__).resolve().parent.parent)
@@ -704,16 +706,32 @@ def _ronda_incidencia(id_incidencia: str, notas: str) -> int:
     return ronda
 
 
-def _leer_incidencias() -> list:
-    if not INCIDENCIAS_CSV.exists():
-        return []
-    with INCIDENCIAS_CSV.open(encoding="utf-8-sig", newline="") as f:
-        filas = list(csv.DictReader(f))
+def _modulo_de_id(id_incidencia: str) -> Optional[int]:
+    m = re.search(r"(?:INC|TC|NC)-M0(\d+)-", id_incidencia or "", re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+
+def _leer_incidencias() -> tuple[list, dict]:
+    """Incidencias de todos los modulos y el estado de la lectura de Taiga.
+    Los modulos de taiga.MODULOS (3 y 4) salen de Taiga; el resto, de
+    incidencias.csv. Si Taiga esta apagado o no hay nada que mostrar de ahi
+    (ni del ultimo intento bueno), esos modulos se leen del CSV."""
+    filas = []
+    if INCIDENCIAS_CSV.exists():
+        with INCIDENCIAS_CSV.open(encoding="utf-8-sig", newline="") as f:
+            filas = list(csv.DictReader(f))
+    de_taiga, estado_taiga = taiga.traer_incidencias()
+    if de_taiga or estado_taiga["ok"] and not estado_taiga.get("desactivado"):
+        filas = [f for f in filas if _modulo_de_id(f.get("ID", "")) not in taiga.MODULOS]
+    for fila in filas:
+        fila.setdefault("fuente", "CSV")
+    filas += de_taiga
     for fila in filas:
         fila["ronda_evaluacion"] = _ronda_incidencia(
-            fila.get("ID", ""), fila.get("Evidencia / Notas", "")
+            fila.get("ID", ""),
+            fila.get("Evidencia / Notas", "") if fila["fuente"] == "CSV" else fila.get("texto_clasificacion", ""),
         )
-    return filas
+    return filas, estado_taiga
 
 
 def _leer_asignaciones() -> dict:
@@ -917,6 +935,7 @@ def scan() -> dict:
     def pct(n: int) -> float:
         return round(100 * n / total_tcs, 1) if total_tcs else 0.0
 
+    incidencias, estado_taiga = _leer_incidencias()
     return {
         "generado_en": datetime.now().isoformat(timespec="seconds"),
         "resumen": {
@@ -941,7 +960,8 @@ def scan() -> dict:
             for r in sorted(resultados, key=lambda r: (r.estado != "Rechazado", r.rf, r.tc_id))
         ],
         "errores_frecuentes": errores_top,
-        "incidencias": _leer_incidencias(),
+        "incidencias": incidencias,
+        "taiga": estado_taiga,
     }
 
 

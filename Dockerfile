@@ -5,7 +5,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY server.py scanner.py dashboard.html asignaciones.csv declarados_sin_evidencia.csv incidencias.csv ./
+COPY server.py scanner.py taiga.py dashboard.html asignaciones.csv declarados_sin_evidencia.csv incidencias.csv ./
 
 # /data debe ser un volumen persistente en Dokploy: ahi quedan los repos
 # clonados (rama test) y el ultimo escaneo, asi un redeploy no re-clona todo.

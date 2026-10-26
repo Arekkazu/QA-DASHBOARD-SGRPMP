@@ -100,6 +100,8 @@ def actualizar():
         repos = [_estado_repo(n, u) for n, u in REPOS.items()]
         data = scanner.scan()
         data["repos"] = repos
+        if data.get("taiga", {}).get("repo"):  # misma linea de "fuentes" que los repos
+            data["repos"].append(data["taiga"])
         CACHE.parent.mkdir(parents=True, exist_ok=True)
         tmp = CACHE.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

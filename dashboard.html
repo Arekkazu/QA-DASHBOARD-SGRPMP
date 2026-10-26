@@ -267,6 +267,9 @@
     <div class="toolbar">
       <input type="search" id="buscador-inc" placeholder="Buscar por ID, RF, categoría o descripción…">
       <select id="filtro-estado-inc"><option value="Todos">Todos los estados</option></select>
+      <select id="filtro-evaluador-inc"><option value="Todos">Todos los evaluadores</option></select>
+      <select id="filtro-categoria-inc"><option value="Todos">Todas las categorías</option></select>
+      <select id="filtro-rf-inc"><option value="Todos">Todos los RF</option></select>
       <button type="button" id="limpiar-filtros-inc">Limpiar filtros</button>
       <span class="conteo" id="conteo-filtrado-inc"></span>
     </div>
@@ -364,7 +367,7 @@ function etiquetaRonda(n) {
   return ETIQUETAS_RONDA[n] || `${n}.ª evaluación`;
 }
 const filtro = { texto: '', estado: 'Todos', rf: 'Todos', origen: 'Todos', responsable: 'Todos', ordenCol: 'tc_id', ordenAsc: true };
-const filtroInc = { texto: '', estado: 'Todos', ordenCol: null, ordenAsc: true };
+const filtroInc = { texto: '', estado: 'Todos', evaluador: 'Todos', categoria: 'Todos', rf: 'Todos', ordenCol: null, ordenAsc: true };
 const patronesExpandidos = new Set();
 
 function partesTC(tcId) {
@@ -801,7 +804,7 @@ function renderTiposError() {
   let total;
   const incidencias = incidenciasDeRonda(estado.rondaTipos);
   incidencias.forEach(i => {
-    const cat = categoriaBase(i['Categoria del error']);
+    const cat = categoriaBase(i['Categoria del error'] || i['texto_clasificacion']);
     conteos.set(cat, (conteos.get(cat) || 0) + 1);
   });
   total = incidencias.length;
@@ -843,11 +846,53 @@ function poblarFiltroEstadoInc(incidencias) {
   if (estados.includes(actual)) select.value = actual;
 }
 
+// Claves de filtro. El evaluador se compara sin mayusculas/espacios ("laura" y
+// "Laura" son la misma persona en el CSV); la categoria, por codigo oficial
+// (incluye la estimada de Taiga); el RF, tal cual, con "Sin RF" para vacios.
+const SIN_VALOR = '(vacío)';
+const claveEvaluador = i => (i['Evaluador'] || '').trim().toLowerCase() || SIN_VALOR;
+const claveCategoria = i => categoriaBase(i['Categoria del error'] || i['texto_clasificacion']);
+// Una incidencia puede citar varios RF ("RF-50/RF-51") o texto libre
+// ("TRANSVERSAL..."): cada RF es una opcion y cuenta en todos los que cita.
+const clavesRF = i => {
+  const rfs = Array.from(new Set(Array.from((i['RF relacionado'] || '').matchAll(/RF-?\s*(\d+)/gi), m => 'RF-' + m[1].padStart(2, '0'))));
+  return rfs.length ? rfs : [SIN_VALOR];
+};
+
+function poblarFiltrosInc(incidencias) {
+  const llenar = (id, claves, etiquetaTodos, etiqueta, orden) => {
+    const select = document.getElementById(id);
+    const campo = { 'filtro-evaluador-inc': 'evaluador', 'filtro-categoria-inc': 'categoria', 'filtro-rf-inc': 'rf' }[id];
+    const valores = new Map();
+    incidencias.forEach(i => {
+      claves(i).forEach(k => {
+        if (!valores.has(k)) valores.set(k, { n: 0, i });
+        valores.get(k).n++;
+      });
+    });
+    const lista = Array.from(valores.keys()).sort(orden);
+    select.innerHTML = `<option value="Todos">${etiquetaTodos}</option>` +
+      lista.map(k => `<option value="${esc(k)}">${esc(etiqueta(k, valores.get(k).i))} (${valores.get(k).n})</option>`).join('');
+    if (lista.includes(filtroInc[campo])) select.value = filtroInc[campo]; else filtroInc[campo] = 'Todos';
+  };
+  const alfa = (a, b) => (a === SIN_VALOR) - (b === SIN_VALOR) || a.localeCompare(b, 'es');
+  llenar('filtro-evaluador-inc', i => [claveEvaluador(i)], 'Todos los evaluadores',
+    (k, i) => k === SIN_VALOR ? 'Sin evaluador' : (i['Evaluador'] || '').trim(), alfa);
+  llenar('filtro-categoria-inc', i => [claveCategoria(i)], 'Todas las categorías',
+    k => (ETIQUETAS_CATEGORIA_ERROR[k] || k).replace(/ \(.*\)$/, ''), alfa);
+  llenar('filtro-rf-inc', clavesRF, 'Todos los RF',
+    k => k === SIN_VALOR ? 'Sin RF / transversal' : k,
+    (a, b) => (a === SIN_VALOR) - (b === SIN_VALOR) || (parseInt(a.replace(/\D/g, ''), 10) || 0) - (parseInt(b.replace(/\D/g, ''), 10) || 0));
+}
+
 function filtrarIncidencias(incidencias) {
   const texto = filtroInc.texto.trim().toLowerCase();
   return incidencias.filter(i => {
     if (estado.modulo !== 'Todos' && moduloDeIncidencia(i) !== estado.modulo) return false;
     if (filtroInc.estado !== 'Todos' && normalizarEstadoIncidencia(i['Estado']) !== filtroInc.estado) return false;
+    if (filtroInc.evaluador !== 'Todos' && claveEvaluador(i) !== filtroInc.evaluador) return false;
+    if (filtroInc.categoria !== 'Todos' && claveCategoria(i) !== filtroInc.categoria) return false;
+    if (filtroInc.rf !== 'Todos' && !clavesRF(i).includes(filtroInc.rf)) return false;
     if (texto) {
       const campos = ['ID', 'RF relacionado', 'Categoria del error', 'Equipo responsable', 'Descripcion del error'];
       const coincide = campos.some(campo => (i[campo] || '').toLowerCase().includes(texto));
@@ -875,14 +920,15 @@ function actualizarFlechasOrdenInc() {
 
 function renderIncidencias() {
   if (!ultimoData) return;
+  poblarFiltrosInc(incidenciasDelModulo());
   const filtradas = ordenarIncidencias(filtrarIncidencias(ultimoData.incidencias));
   const filtradasPagina = paginar('incidencias', filtradas);
   const tbody = document.querySelector('#tabla-incidencias tbody');
   tbody.innerHTML = filtradasPagina.length ? filtradasPagina.map(i => `<tr>
-      <td class="mono">${esc(i['ID'])}</td>
+      <td class="mono">${i['taiga_url'] ? `<a href="${esc(i['taiga_url'])}" target="_blank" rel="noopener" title="Abrir en Taiga">${esc(i['ID'])}</a>` : esc(i['ID'])}</td>
       <td>${esc(i['RF relacionado'])}</td>
-      <td>${esc(i['Categoria del error'])}</td>
-      <td>${esc(i['Equipo responsable'])}</td>
+      <td>${esc(i['Categoria del error'] || (i['texto_clasificacion'] ? (ETIQUETAS_CATEGORIA_ERROR[categoriaBase(i['texto_clasificacion'])] || '').replace(/ \(.*\)$/, '') + ' (estimada)' : ''))}</td>
+      <td>${esc(i['Equipo responsable'] || i['Asignado a'])}</td>
       <td>${esc(i['Severidad'])}</td>
       <td>${esc(normalizarEstadoIncidencia(i['Estado']))}</td>
       <td>${esc(i['Fecha limite'])}</td>
@@ -897,8 +943,11 @@ function renderIncidencias() {
 
 document.getElementById('buscador-inc').addEventListener('input', e => { filtroInc.texto = e.target.value; paginaActual.incidencias = 1; renderIncidencias(); });
 document.getElementById('filtro-estado-inc').addEventListener('change', e => { filtroInc.estado = e.target.value; paginaActual.incidencias = 1; renderIncidencias(); });
+[['evaluador', 'filtro-evaluador-inc'], ['categoria', 'filtro-categoria-inc'], ['rf', 'filtro-rf-inc']].forEach(([campo, id]) => {
+  document.getElementById(id).addEventListener('change', e => { filtroInc[campo] = e.target.value; paginaActual.incidencias = 1; renderIncidencias(); });
+});
 document.getElementById('limpiar-filtros-inc').addEventListener('click', () => {
-  filtroInc.texto = ''; filtroInc.estado = 'Todos';
+  filtroInc.texto = ''; filtroInc.estado = 'Todos'; filtroInc.evaluador = filtroInc.categoria = filtroInc.rf = 'Todos';
   document.getElementById('buscador-inc').value = '';
   document.getElementById('filtro-estado-inc').value = 'Todos';
   paginaActual.incidencias = 1;

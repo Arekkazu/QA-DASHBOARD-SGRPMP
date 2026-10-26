@@ -3,6 +3,7 @@ __pycache__/
 
 # Cache del escaneo y repos clonados (en Docker viven en el volumen /data)
 scan_cache.json
+taiga_cache.json
 *.tmp
 data/
 

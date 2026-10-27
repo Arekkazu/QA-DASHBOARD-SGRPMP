@@ -53,6 +53,7 @@ INCIDENCIAS_CSV = Path(__file__).resolve().parent / "incidencias.csv"
 ASIGNACIONES_CSV = Path(__file__).resolve().parent / "asignaciones.csv"
 DECLARADOS_CSV = Path(__file__).resolve().parent / "declarados_sin_evidencia.csv"
 EVALUADORES_CSV = Path(__file__).resolve().parent / "evaluadores.csv"
+ELIMINADOS_CSV = Path(__file__).resolve().parent / "casos_eliminados.csv"
 SIN_ASIGNAR = "Sin asignar"
 
 TC_DIR_RE = re.compile(r"^TC-M0(\d+)-(G?)(\d+)$", re.IGNORECASE)
@@ -175,6 +176,43 @@ def _parse_cypress_json(texto: str) -> Optional[dict]:
         for c in checkpoints if c.get("estado") == "FALLA"
     ]
     return {"total": total, "passed": passed, "failed": failed, "errores": errores}
+
+
+def _parse_resultado_run(texto: str) -> Optional[dict]:
+    """resultado.json de las corridas RUN-<grupo>-V<n>-<fecha>/ (M03 RF-58/59):
+    {"grupo": ..., "casos": {"TC-M03-173": {"estado": "APROBADO", ...}, ...}}.
+
+    APROBADO y RECHAZADO cuentan como veredicto. NO_CONCLUYENTE y los casos sin
+    veredicto (estado_tecnico ERROR_QA: fallo de la automatizacion, no del
+    producto) NO son aprobacion: si no hay ningun RECHAZADO el grupo queda
+    Pendiente, igual que un cypress-json sin checkpoints."""
+    try:
+        data = json.loads(texto)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or "grupo" not in data:
+        return None
+    casos = data.get("casos")
+    if isinstance(casos, dict):
+        casos = [{"id": k, **v} for k, v in casos.items() if isinstance(v, dict)]
+    if not isinstance(casos, list):
+        return None
+    casos = [c for c in casos if isinstance(c, dict)]  # otros resultado.json traen casos como texto
+    if not casos:
+        return None
+
+    def veredicto(c: dict) -> str:
+        return str(c.get("estado") or c.get("veredicto_funcional") or c.get("veredicto") or "").upper()
+
+    rechazados = [c for c in casos if veredicto(c) == "RECHAZADO"]
+    aprobados = [c for c in casos if veredicto(c) == "APROBADO"]
+    errores = [
+        f"{c.get('id', '')}: {c.get('motivo') or c.get('justificacion_veredicto') or 'RECHAZADO'}"[:220]
+        for c in rechazados
+    ]
+    if not rechazados and len(aprobados) < len(casos):
+        return {"total": 0, "passed": 0, "failed": 0, "errores": []}
+    return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
 
 
 def _mochawesome_desde_dict(data) -> Optional[dict]:
@@ -424,6 +462,9 @@ def _es_candidato_valido(p: Path, es_raiz_tc: bool) -> bool:
         return False
     if p.name.endswith((".postman_collection.json", ".cy.ts", ".cy.js")):
         return False
+    # Plantillas para registrar a mano una sesion (ej. TC-M03-G105): insumo, no resultado.
+    if p.name.lower().startswith("plantilla"):
+        return False
     return "node_modules" not in p.parts
 
 
@@ -534,6 +575,7 @@ _PARSERS_POR_EXT = {
         ("cypress-json", _parse_cypress_json),
         ("mochawesome", _parse_mochawesome),
         ("k6-resumen", _parse_k6_resumen),
+        ("resultado-run", _parse_resultado_run),
     ],
     ".html": [
         ("pytest-html", _parse_pytest_html),
@@ -755,6 +797,15 @@ def _nombre_oficial(nombre: str, alias: dict) -> str:
     return alias.get(taiga._norm(limpio), limpio)
 
 
+def _leer_eliminados() -> set:
+    """casos_eliminados.csv: TC que salieron del plan de pruebas pero cuya
+    carpeta sigue en el repo. No se cuentan en ningun total del panel."""
+    if not ELIMINADOS_CSV.exists():
+        return set()
+    with ELIMINADOS_CSV.open(encoding="utf-8-sig", newline="") as f:
+        return {_normalizar_tc_id(fila["TC"].strip()) for fila in csv.DictReader(f) if fila.get("TC")}
+
+
 def _leer_asignaciones() -> dict:
     """Lee asignaciones.csv (TC -> Responsable) para poder mostrar cuantos
     casos ha ejecutado cada quien. Si el archivo no existe todavia, todos
@@ -927,6 +978,8 @@ def scan() -> dict:
         + _escanear_raiz(FRONTEND_TESTS, "frontend", asignaciones, declarados)
     )
     resultados = _deduplicar_por_tc(resultados)
+    eliminados = _leer_eliminados()
+    resultados = [r for r in resultados if r.tc_id not in eliminados]
 
     total_tcs = len(resultados)
     aprobados = sum(1 for r in resultados if r.estado == "Aprobado")

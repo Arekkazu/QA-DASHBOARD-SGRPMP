@@ -181,6 +181,55 @@
   .paginacion .pag-btn:hover:not(:disabled) { color: var(--text); }
   .paginacion .pag-btn:disabled { opacity: .45; cursor: default; }
   .paginacion .pag-info { color: var(--text-muted); font-size: 12px; }
+
+  /* ---- Resumen para el cliente (graficas en lenguaje de campo) ---- */
+  #resumen-cliente { padding-bottom: 6px; }
+  #resumen-cliente > h2 .muted { text-transform: none; font-weight: 400; letter-spacing: 0; }
+  .cli-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px 16px 6px; }
+  @media (max-width: 860px) { .cli-grid { grid-template-columns: minmax(0, 1fr); } }
+  .cli-card { border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px 12px; background: var(--card-bg); min-width: 0; }
+  .cli-card.ancho { grid-column: 1 / -1; }
+  .cli-card h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .cli-card .sub { color: var(--text-muted); font-size: 12px; margin: 0 0 12px; line-height: 1.45; }
+  .cli-hero { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .cli-hero .grande { font-size: 56px; line-height: 1; font-weight: 700; letter-spacing: -.02em; }
+  .cli-hero .frase { font-size: 14px; max-width: 560px; line-height: 1.5; }
+  .cli-leyenda { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--text-muted); margin: 10px 0 12px; }
+  .cli-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+  .cli-leyenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .cli-fila { display: grid; grid-template-columns: minmax(110px, 190px) minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 5px 0; }
+  .cli-fila .nom { font-size: 13px; line-height: 1.25; }
+  .cli-fila .nom small { display: block; color: var(--text-muted); font-size: 11px; }
+  .cli-fila .val { font-size: 13px; font-weight: 600; text-align: right; min-width: 64px; white-space: nowrap; }
+  .cli-fila .val small { display: block; color: var(--text-muted); font-weight: 400; font-size: 11px; }
+  .cli-barra { display: flex; gap: 2px; height: 20px; border-radius: 4px; overflow: hidden; background: transparent; }
+  .cli-barra > div { height: 100%; min-width: 0; transition: filter .12s; outline: none; }
+  .cli-barra > div:hover, .cli-barra > div:focus-visible { filter: brightness(1.12); }
+  .cli-barra > div:focus-visible { box-shadow: inset 0 0 0 2px var(--text); }
+  .cli-barra .vacia { background: var(--border); flex: 1; }
+  .cli-pista { background: var(--bg); border-radius: 4px; height: 20px; overflow: hidden; }
+  .cli-pista > div { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; outline: none; transition: filter .12s; }
+  .cli-pista > div:hover, .cli-pista > div:focus-visible { filter: brightness(1.12); }
+  .cli-pista > div:focus-visible { box-shadow: inset 0 0 0 2px var(--text); }
+  .cli-curva { width: 100%; height: auto; display: block; margin-top: 4px; overflow: visible; }
+  .cli-curva .cli-hit:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+  .cli-tabla summary { cursor: pointer; font-size: 12px; color: var(--text-muted); margin-top: 8px; width: fit-content; }
+  .cli-tabla table { margin-top: 6px; font-size: 12px; }
+  .cli-tabla th, .cli-tabla td { padding: 5px 8px; }
+  .cli-area { border-top: 1px solid var(--border); padding: 10px 0; }
+  .cli-area:first-of-type { border-top: 0; }
+  .cli-area > summary { cursor: pointer; font-size: 14px; }
+  .cli-funcs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+  @media (max-width: 860px) { .cli-funcs { grid-template-columns: minmax(0, 1fr); } }
+  .cli-func { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: 10px; }
+  .cli-func .fn { font-size: 13px; line-height: 1.3; }
+  .cli-func .fs { font-size: 11px; color: var(--text-muted); }
+  .cli-barra.mini { height: 8px; border-radius: 3px; }
+  .cli-vacio { color: var(--text-muted); font-size: 13px; padding: 10px 0; }
+  #tt-cli { position: fixed; z-index: 50; pointer-events: none; background: var(--text); color: var(--bg); border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.35; max-width: 260px; display: none; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  #tt-cli b { display: block; font-size: 13px; }
+  .cli-actualizando { opacity: .6; }
+  @media (forced-colors: active) { .cli-barra > div, .cli-pista > div { forced-color-adjust: none; border: 1px solid CanvasText; } }
 </style>
 </head>
 <body>
@@ -203,6 +252,11 @@
   </div>
 
   <div class="stackbar" id="stackbar"></div>
+
+  <section id="resumen-cliente">
+    <h2>Resumen para el cliente <span class="muted">— cómo va el sistema, en palabras sencillas</span></h2>
+    <div class="cli-grid" id="cli-grid"></div>
+  </section>
 
   <section>
     <h2>Por responsable — casos ejecutados en tiempo real</h2>
@@ -1079,6 +1133,336 @@ document.querySelectorAll('#tabla-casos th[data-col]').forEach(th => {
 
 // ---- Orquestador general --------------------------------------------------
 
+// ---- Resumen para el cliente: graficas en lenguaje de campo --------------
+// Sin jerga tecnica: "funciona / con fallas / sin probar" en lugar de aprobado / rechazado / pendiente.
+// Los textos que vienen de los datos se escapan con esc(); el tooltip se arma con textContent.
+
+const AREAS_CLIENTE = {
+  1: ['Usuarios y accesos', 'Quién entra al sistema y qué puede hacer'],
+  2: ['Animales y lotes', 'Registro y seguimiento de animales, lotes y su historial'],
+  3: ['Sensores y alertas', 'Lecturas de los sensores y avisos cuando algo se sale de lo normal'],
+  4: ['Salud y predicción con IA', 'Detección de enfermedades y riesgo de contagio'],
+  5: ['Insumos y suministros', 'Alimentos, insumos y sus costos'],
+  9: ['Fincas y configuración', 'Fincas, corrales o estanques, especies y dispositivos'],
+};
+function nombreArea(n) { return (AREAS_CLIENTE[n] || ['Módulo ' + n])[0]; }
+function detalleArea(n) { return (AREAS_CLIENTE[n] || [null, ''])[1] || ''; }
+
+// Acepta 2026-10-27 y 27/10/2026.
+function parseFechaInc(txt) {
+  const t = (txt || '').trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  return null;
+}
+function tt(valor, etiqueta) {
+  return ` data-v="${esc(valor)}" data-l="${esc(etiqueta)}" tabindex="0"`;
+}
+function barraEstado(ok, fail, pend, nombre) {
+  const seg = (n, cls, txt) => n ? `<div style="flex:${n} 1 0; background:var(--${cls})"${tt(n + ' ' + (n === 1 ? 'verificación' : 'verificaciones'), txt + ' · ' + nombre)}></div>` : '';
+  return `<div class="cli-barra" role="img" aria-label="${esc(nombre)}: ${ok} funcionan, ${fail} con fallas, ${pend} sin probar">` +
+    seg(ok, 'ok', 'Funciona') + seg(fail, 'fail', 'Con fallas') + seg(pend, 'pend', 'Sin probar aún') + (ok + fail + pend ? '' : '<div class="vacia"></div>') + '</div>';
+}
+function tablaGemela(titulos, filas) {
+  return `<details class="cli-tabla" data-id="${esc(titulos[0])}"><summary>Ver como tabla</summary><table><thead><tr>` +
+    titulos.map(t => `<th>${esc(t)}</th>`).join('') + '</tr></thead><tbody>' +
+    filas.map(r => '<tr>' + r.map(c => `<td>${esc(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table></details>';
+}
+function leyendaEstado() {
+  return `<div class="cli-leyenda"><span><i style="background:var(--ok)"></i>✓ Funciona</span><span><i style="background:var(--fail)"></i>✕ Con fallas</span><span><i style="background:var(--pend)"></i>○ Sin probar aún</span></div>`;
+}
+
+// Curva acumulada de problemas encontrados y resueltos. Las incidencias cerradas sin fecha real de
+// correccion se ubican de forma APROXIMADA: fecha de deteccion + mediana de dias de las que si la tienen.
+const FECHA_MIN_CURVA = new Date(2026, 7, 1);   // antes de esto casi seguro es un error de digitacion (p. ej. año 2025)
+function diasEntre(a, b) { return Math.round((b - a) / 86400000); }
+function sumarDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function corta(d) { return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }).replace('.', ''); }
+function htmlCurva(incs, alcance) {
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const datos = []; let sinFecha = 0;
+  incs.forEach(i => {
+    const det = parseFechaInc(i['Fecha deteccion']);
+    if (!det || det < FECHA_MIN_CURVA || det > hoy) { sinFecha++; return; }
+    const real = parseFechaInc(i['Fecha correccion real']);
+    datos.push({ det, cerrada: estaCerrada(i), real: real && real >= det && real <= hoy ? real : null });
+  });
+  // La mediana se calcula con TODAS las incidencias (no solo las del modulo elegido) para que no cambie al cambiar de pestaña.
+  const durReales = [];
+  ultimoData.incidencias.forEach(i => {
+    const d0 = parseFechaInc(i['Fecha deteccion']), r0 = parseFechaInc(i['Fecha correccion real']);
+    if (estaCerrada(i) && d0 && r0 && d0 >= FECHA_MIN_CURVA && r0 >= d0 && r0 <= hoy) durReales.push(diasEntre(d0, r0));
+  });
+  durReales.sort((a, b) => a - b);
+  const mediana = durReales.length ? durReales[Math.floor(durReales.length / 2)] : 6;
+  let aprox = 0;
+  datos.forEach(d => {
+    if (!d.cerrada) { d.fin = null; return; }
+    if (d.real) { d.fin = d.real; return; }
+    const est = sumarDias(d.det, mediana);
+    d.fin = est > hoy ? hoy : est; d.aprox = true; aprox++;
+  });
+  const cerradas = datos.filter(d => d.cerrada).length;
+  const nota = sinFecha ? ` ${sinFecha} ${sinFecha === 1 ? 'problema no aparece' : 'problemas no aparecen'} en la curva por no tener una fecha de detección confiable.` : '';
+  const dias = mediana === 1 ? '1 día' : mediana + ' días';
+  const aviso = aprox
+    ? `<b>Las fechas de cierre son aproximadas</b> en ${aprox} de ${cerradas} corregidos: no se anotó el día real, así que se estimó como el día en que se encontró + ${dias} (el tiempo típico, la mediana, que tardaron en resolverse los que sí tienen fecha).`
+    : 'Todos los cierres tienen su fecha real.';
+  const sub = `Los problemas encontrados y los ya corregidos, sumados día a día en ${esc(alcance)}. La distancia entre las dos líneas son los problemas que siguen abiertos. ${aviso}${esc(nota)}`;
+  if (!datos.length) return `<div class="cli-card ancho"><h3>¿Vamos resolviendo los problemas?</h3><p class="sub">${sub}</p><div class="cli-vacio">No hay problemas con fecha para dibujar.</div></div>`;
+
+  const ini = new Date(Math.min(...datos.map(d => d.det)));
+  const n = diasEntre(ini, hoy) + 1;
+  const enc = new Array(n).fill(0), res = new Array(n).fill(0), apx = new Array(n).fill(0);
+  datos.forEach(d => {
+    enc[diasEntre(ini, d.det)]++;
+    if (d.fin) { const k = diasEntre(ini, d.fin); res[k]++; if (d.aprox) apx[k]++; }
+  });
+  for (let k = 1; k < n; k++) { enc[k] += enc[k - 1]; res[k] += res[k - 1]; apx[k] += apx[k - 1]; }
+
+  const ancho = document.getElementById('cli-grid').clientWidth || 940;   // ancho real: el texto no se escala
+  const W = Math.max(320, Math.min(1100, ancho - 66)), H = W < 520 ? 230 : 270, L = 38, R = W < 520 ? 104 : 128, T = 14, B = 30, pw = W - L - R, ph = H - T - B;
+  const ymax = Math.max(...enc, 1), paso = ymax <= 10 ? 2 : ymax <= 50 ? 10 : ymax <= 120 ? 20 : 50, ytop = Math.ceil(ymax / paso) * paso;
+  const X = k => L + (n === 1 ? pw / 2 : pw * k / (n - 1)), Y = v => T + ph - ph * v / ytop;
+  const linea = arr => arr.map((v, k) => (k ? 'L' : 'M') + X(k).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+  let rejilla = '';
+  for (let v = 0; v <= ytop; v += paso) rejilla += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="1"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-muted)">${v}</text>`;
+  const marcas = Math.min(6, n); let ejeX = '';
+  for (let m = 0; m < marcas; m++) {
+    const k = marcas === 1 ? 0 : Math.round((n - 1) * m / (marcas - 1));
+    ejeX += `<text x="${X(k)}" y="${H - 8}" text-anchor="${m === 0 ? 'start' : m === marcas - 1 ? 'end' : 'middle'}" font-size="11" fill="var(--text-muted)">${esc(corta(sumarDias(ini, k)))}</text>`;
+  }
+  const fin = n - 1;
+  const punto = (v, col) => `<circle cx="${X(fin)}" cy="${Y(v)}" r="4.5" fill="${col}" stroke="var(--card-bg)" stroke-width="2"/>`;
+  const etiqueta = (v, txt, dy) => `<text x="${X(fin) + 10}" y="${Y(v) + dy}" font-size="12" fill="var(--text)"><tspan font-weight="600">${v}</tspan> ${esc(txt)}</text>`;
+  const sepY = Math.abs(Y(enc[fin]) - Y(res[fin])) < 16 ? 8 : 0;
+  const serie = JSON.stringify({ ini: ini.getTime(), n, enc, res, apx });
+  const svg = `<svg class="cli-curva" viewBox="0 0 ${W} ${H}" role="img" aria-label="Problemas encontrados y resueltos acumulados: ${enc[fin]} encontrados y ${res[fin]} resueltos hasta hoy" data-serie="${esc(serie)}" data-l="${L}" data-r="${R}" data-w="${W}" data-h="${H}">
+    ${rejilla}${ejeX}
+    <path d="${linea(enc)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <path d="${linea(res)}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${punto(enc[fin], 'var(--accent)')}${punto(res[fin], 'var(--ok)')}
+    ${etiqueta(enc[fin], 'encontrados', -sepY)}${etiqueta(res[fin], 'resueltos', 4 + sepY)}
+    <line class="cli-cruz" x1="0" x2="0" y1="${T}" y2="${T + ph}" stroke="var(--text-muted)" stroke-width="1" style="display:none"/>
+    <circle class="cli-cruz-a" r="4.5" fill="var(--accent)" stroke="var(--card-bg)" stroke-width="2" style="display:none"/>
+    <circle class="cli-cruz-b" r="4.5" fill="var(--ok)" stroke="var(--card-bg)" stroke-width="2" style="display:none"/>
+    <rect class="cli-hit" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent" tabindex="0"/>
+  </svg>`;
+  // tabla gemela: un renglon por semana (y el dia de hoy)
+  const filas = [];
+  for (let k = 0; k < n; k += 7) filas.push(k);
+  if (filas[filas.length - 1] !== fin) filas.push(fin);
+  const tabla = tablaGemela(['Hasta el día', 'Encontrados (acumulado)', 'Resueltos (acumulado)', 'Siguen abiertos'],
+    filas.map(k => [sumarDias(ini, k).toLocaleDateString('es-CO'), enc[k], res[k] + (apx[k] ? ' (≈ ' + apx[k] + ' con fecha aproximada)' : ''), enc[k] - res[k]]));
+  return `<div class="cli-card ancho">
+    <h3>¿Vamos resolviendo los problemas?</h3>
+    <p class="sub">${sub}</p>
+    <div class="cli-leyenda"><span><i style="background:var(--accent)"></i>Encontrados (acumulado)</span><span><i style="background:var(--ok)"></i>Resueltos (acumulado${aprox ? ', fechas aproximadas' : ''})</span></div>
+    ${svg}${tabla}
+  </div>`;
+}
+
+// Funcionalidades del sistema, una por requerimiento, con nombre de campo. El estado sale de las pruebas:
+// todo aprobado = funciona; mezcla = funciona con fallas por corregir; solo fallas = con fallas; sin resultados = sin probar.
+const FUNCIONES_CLIENTE = {
+  1: [['RF-01', 'Registrarse en el sistema'], ['RF-02', 'Iniciar sesión de forma segura'], ['RF-03', 'Crear y administrar perfiles de usuario (roles)'],
+      ['RF-04', 'Definir qué puede hacer cada perfil'], ['RF-05', 'Editar los datos de un usuario'], ['RF-06', 'Activar o desactivar cuentas'],
+      ['RF-07', 'Cambiar la contraseña'], ['RF-08', 'Recuperar una contraseña olvidada'], ['RF-09', 'Restablecer la contraseña desde un enlace'],
+      ['RF-10', 'Historial de accesos y actividad'], ['RF-11', 'Ver la lista de usuarios'], ['RF-12', 'Ver el detalle de un usuario'],
+      ['RF-13', 'Ver el perfil propio'], ['RF-14', 'Recibir notificaciones']],
+  2: [['RF-33', 'Registrar animales o lotes'], ['RF-34', 'Ubicar los animales en corrales, estanques o áreas'], ['RF-35', 'Gestionar animales individuales'],
+      ['RF-36', 'Gestionar lotes (grupos de animales)'], ['RF-37', 'Pasar el animal o lote de una fase productiva a otra'], ['RF-38', 'Cerrar el ciclo productivo'],
+      ['RF-39', 'Registrar eventos biológicos'], ['RF-40', 'Registrar el crecimiento (peso y medidas)'], ['RF-41', 'Registrar eventos de salud'],
+      ['RF-42', 'Registrar eventos reproductivos'], ['RF-43', 'Registrar eventos de producción'], ['RF-44', 'Cambiar el estado de un animal o lote'],
+      ['RF-45', 'Registrar bajas'], ['RF-46', 'Consultar el historial de un animal o lote'], ['RF-47', 'Ver la ficha completa de un animal o lote'],
+      ['RF-48', 'Trasladar animales entre corrales o áreas'], ['RF-49', 'Vincular animales con sensores'], ['RF-50', 'Dejar los datos listos para análisis'],
+      ['RF-51', 'Calcular indicadores de rendimiento (zootécnicos)'], ['RF-52', 'Dejar registro de los cambios biológicos']],
+  3: [['RF-53', 'Recibir y guardar las lecturas de los sensores'], ['RF-54', 'Guardar datos si falla la conexión y enviarlos después'], ['RF-55', 'Detectar desviaciones en la propia finca'],
+      ['RF-56', 'Enviar los datos al motor de inteligencia artificial'], ['RF-57', 'Generar y gestionar alertas ambientales'], ['RF-58', 'Monitoreo ambiental en tiempo real'],
+      ['RF-59', 'Historial de lecturas ambientales'], ['RF-60', 'Detectar sensores que dejaron de reportar'], ['RF-61', 'Asociar las lecturas a cada animal o lote'],
+      ['RF-62', 'Revisar la calidad de los datos de los sensores'], ['RF-63', 'Registro de lecturas y alertas para auditoría']],
+  4: [['RF-64', 'Catálogo de enfermedades'], ['RF-65', 'Configurar el motor de inteligencia artificial'], ['RF-66', 'Detectar enfermedades con IA en tiempo real'],
+      ['RF-67', 'Historial de diagnósticos de cada animal'], ['RF-68', 'Estimar el riesgo de contagio'], ['RF-69', 'Validar y llevar versiones de los modelos de IA'],
+      ['RF-70', 'Actualizar el modelo de IA en los equipos de la finca'], ['RF-71', 'Reentrenar el modelo de IA'], ['RF-72', 'Corrección del veterinario a los diagnósticos'],
+      ['RF-73', 'Registro de la actividad del motor de predicción']],
+  9: [['RF-15', 'Catálogo de especies'], ['RF-16', 'Etapas productivas y enfermedades de cada especie'], ['RF-17', 'Límites y niveles de alerta ambiental'],
+      ['RF-18', 'Parámetros de funcionamiento del sistema'], ['RF-19', 'Datos de la finca'], ['RF-20', 'Corrales, estanques o áreas de producción'],
+      ['RF-21', 'Registrar dispositivos y sensores'], ['RF-22', 'Asociar sensores a corrales o estanques'], ['RF-23', 'Configurar los dispositivos a distancia'],
+      ['RF-24', 'Calibrar los sensores'], ['RF-25', 'Adaptar la pantalla a la operación'], ['RF-26', 'Personalizar la identidad visual (logo y colores)'],
+      ['RF-27', 'Elegir el tema visual (claro u oscuro)'], ['RF-28', 'Personalizar el panel principal'], ['RF-29', 'Elegir el idioma'],
+      ['RF-30', 'Ver las plantillas de configuración'], ['RF-31', 'Crear plantillas de configuración'], ['RF-32', 'Aplicar una plantilla a una finca']],
+};
+function estadoFuncion(c) {
+  const t = c.ok + c.fail + c.pend;
+  if (!t) return { txt: 'Aún sin probar', k: 'nada' };
+  if (c.fail === 0 && c.pend === 0) return { txt: 'Funciona', k: 'ok' };
+  if (c.fail === 0) return { txt: c.ok ? 'Funciona; faltan pruebas' : 'En pruebas', k: 'prueba' };
+  return { txt: c.ok ? 'Funciona, con fallas por corregir' : 'Con fallas por corregir', k: 'falla' };
+}
+function htmlFunciones() {
+  const cuentaRf = new Map();   // "RF-33" -> {ok, fail, pend}
+  ultimoData.casos.forEach(c => {
+    const a = cuentaRf.get(c.rf) || { ok: 0, fail: 0, pend: 0 };
+    if (c.estado === 'Aprobado') a.ok++; else if (c.estado === 'Rechazado') a.fail++; else a.pend++;
+    cuentaRf.set(c.rf, a);
+  });
+  const areas = Object.keys(FUNCIONES_CLIENTE).map(Number).filter(n => estado.modulo === 'Todos' || estado.modulo === n);
+  let total = 0, completas = 0, conFallas = 0;
+  const bloques = areas.map(n => {
+    const lista = FUNCIONES_CLIENTE[n].map(([rf, nombre]) => ({ rf, nombre, c: cuentaRf.get(rf) || { ok: 0, fail: 0, pend: 0 } }));
+    lista.forEach(x => { x.e = estadoFuncion(x.c); });
+    const ok = lista.filter(x => x.e.k === 'ok').length, mal = lista.filter(x => x.e.k === 'falla').length;
+    total += lista.length; completas += ok; conFallas += mal;
+    const items = lista.map(x => `<div class="cli-func">${barraEstado(x.c.ok, x.c.fail, x.c.pend, x.nombre).replace('class="cli-barra"', 'class="cli-barra mini"').replace(/ tabindex="0"/g, '')}
+        <div><div class="fn">${esc(x.nombre)}</div><div class="fs">${esc(x.e.txt)}</div></div></div>`).join('');
+    return `<details class="cli-area" data-id="func-${n}"${estado.modulo === n ? ' open' : ''}>
+      <summary><b>${esc(nombreArea(n))}</b><span class="muted"> — ${ok} de ${lista.length} funciones completas${mal ? ', ' + mal + ' con fallas' : ''}</span></summary>
+      <p class="sub" style="margin:6px 0 8px">${esc(detalleArea(n))}</p><div class="cli-funcs">${items}</div></details>`;
+  }).join('');
+  const tabla = tablaGemela(['Área', 'Función', 'Estado'], areas.flatMap(n => FUNCIONES_CLIENTE[n].map(([rf, nombre]) => [nombreArea(n), nombre, estadoFuncion(cuentaRf.get(rf) || { ok: 0, fail: 0, pend: 0 }).txt])));
+  return `<div class="cli-card ancho">
+    <h3>¿Qué puede hacer el sistema hasta ahora?</h3>
+    <p class="sub">El sistema ofrece <b>${total}</b> funciones${areas.length > 1 ? ' repartidas en ' + areas.length + ' áreas' : ''}. Hoy <b>${completas}</b> funcionan completas${conFallas ? ' y <b>' + conFallas + '</b> tienen fallas por corregir' : ''}. Abra cada área para ver el detalle.</p>
+    ${leyendaEstado()}${bloques}${tabla}
+  </div>`;
+}
+
+function htmlCliente() {
+  const casos = casosDelModulo();
+  const r = calcularResumen(casos);
+  const alcance = estado.modulo === 'Todos' ? 'todo el sistema' : 'el área «' + nombreArea(estado.modulo) + '»';
+
+  // 1) Cifra principal
+  const hero = `<div class="cli-card ancho">
+    <h3>¿Qué tanto del sistema ya funciona?</h3>
+    <p class="sub">Se revisó ${esc(alcance)} con ${r.total} verificaciones. Cada una comprueba que una función hace lo que debe hacer.</p>
+    <div class="cli-hero"><div class="grande">${r.total ? r.pct_aprobados + '%' : '–'}</div>
+      <div class="frase"><b>${r.aprobados}</b> funcionan bien, <b>${r.rechazados}</b> tienen una falla por corregir y <b>${r.pendientes}</b> todavía no se han probado.</div></div>
+    <div style="margin-top:14px">${barraEstado(r.aprobados, r.rechazados, r.pendientes, 'Avance de ' + alcance)}</div>
+    ${leyendaEstado()}
+  </div>`;
+
+  // 2) Estado por area (siempre todas las areas: sirve para comparar)
+  const porArea = new Map();
+  ultimoData.casos.forEach(c => {
+    const n = numeroModulo(c.modulo); if (n == null) return;
+    const a = porArea.get(n) || { ok: 0, fail: 0, pend: 0 };
+    if (c.estado === 'Aprobado') a.ok++; else if (c.estado === 'Rechazado') a.fail++; else a.pend++;
+    porArea.set(n, a);
+  });
+  const areas = Array.from(porArea.keys()).sort((a, b) => a - b);
+  const filasArea = areas.map(n => {
+    const a = porArea.get(n), t = a.ok + a.fail + a.pend, p = t ? Math.round(100 * a.ok / t) : 0;
+    return `<div class="cli-fila"><div class="nom">${esc(nombreArea(n))}<small>${esc(detalleArea(n))}</small></div>
+      ${barraEstado(a.ok, a.fail, a.pend, nombreArea(n))}<div class="val">${p}%<small>${a.ok} de ${t}</small></div></div>`;
+  }).join('');
+  const estadoArea = `<div class="cli-card ancho">
+    <h3>¿Cómo va cada parte del sistema?</h3>
+    <p class="sub">Cada barra es un área. El número de la derecha es el porcentaje que ya funciona bien. Pase el cursor por una barra para ver cantidades.</p>
+    ${leyendaEstado()}${filasArea || '<div class="cli-vacio">Aún no hay verificaciones.</div>'}
+    ${tablaGemela(['Área', 'Funciona', 'Con fallas', 'Sin probar aún', '% que funciona'], areas.map(n => { const a = porArea.get(n), t = a.ok + a.fail + a.pend; return [nombreArea(n), a.ok, a.fail, a.pend, (t ? Math.round(100 * a.ok / t) : 0) + '%']; }))}
+  </div>`;
+
+  // 2b) Funcionalidades del sistema
+  const funciones = htmlFunciones();
+
+  // 3) Curva: problemas encontrados contra resueltos (acumulado). Sigue la pestaña elegida.
+  const curva = htmlCurva(incidenciasDelModulo(), alcance);
+
+  // 4) Donde estan los problemas abiertos (todas las areas)
+  const abiertasTodas = ultimoData.incidencias.filter(i => !estaCerrada(i));
+  const conteoArea = new Map();
+  abiertasTodas.forEach(i => { const n = moduloDeIncidencia(i); if (n != null) conteoArea.set(n, (conteoArea.get(n) || 0) + 1); });
+  const listaArea = Array.from(conteoArea.entries()).sort((a, b) => b[1] - a[1]);
+  const maxA = Math.max(1, ...listaArea.map(x => x[1]));
+  const filasDonde = listaArea.map(([n, c]) => `<div class="cli-fila"><div class="nom">${esc(nombreArea(n))}</div>
+      <div class="cli-pista"><div style="width:${Math.max(2, 100 * c / maxA)}%; background:var(--accent)"${tt(c + (c === 1 ? ' problema abierto' : ' problemas abiertos'), nombreArea(n))}></div></div>
+      <div class="val">${c}</div></div>`).join('');
+  const donde = `<div class="cli-card ancho">
+    <h3>¿Dónde se concentran los problemas?</h3>
+    <p class="sub">Problemas abiertos en cada área del sistema, de mayor a menor.</p>
+    ${filasDonde || '<div class="cli-vacio">No hay problemas abiertos. ✓</div>'}
+    ${tablaGemela(['Área', 'Problemas abiertos'], listaArea.map(([n, c]) => [nombreArea(n), c]))}
+  </div>`;
+
+  return hero + funciones + estadoArea + curva + donde;
+}
+
+let ultimoHtmlCliente = '';
+function renderCliente() {
+  const grid = document.getElementById('cli-grid');
+  const nuevo = htmlCliente();
+  if (nuevo === ultimoHtmlCliente) return;       // sin cambios: no tocar el DOM (conserva hover y tablas abiertas)
+  const abiertas = Array.from(grid.querySelectorAll('details[open]')).map(d => d.dataset.id);
+  grid.innerHTML = nuevo;
+  grid.querySelectorAll('details').forEach(d => { if (abiertas.includes(d.dataset.id)) d.open = true; });
+  ultimoHtmlCliente = nuevo;
+  ocultarTt();
+}
+
+// Tooltip unico: el valor en grande, la etiqueta debajo. Tambien con el teclado (foco).
+const ttEl = document.createElement('div');
+ttEl.id = 'tt-cli'; ttEl.setAttribute('role', 'tooltip');
+document.body.appendChild(ttEl);
+function mostrarTt(el, x, y) {
+  ttEl.textContent = '';
+  const b = document.createElement('b'); b.textContent = el.dataset.v;
+  const l = document.createElement('span'); l.textContent = el.dataset.l;
+  ttEl.append(b, l);
+  ttEl.style.display = 'block';
+  const w = ttEl.offsetWidth, h = ttEl.offsetHeight;
+  ttEl.style.left = Math.max(8, Math.min(x + 12, window.innerWidth - w - 8)) + 'px';
+  ttEl.style.top = Math.max(8, y - h - 12 < 8 ? y + 16 : y - h - 12) + 'px';
+}
+function ocultarTt() { ttEl.style.display = 'none'; }
+const zonaCli = document.getElementById('resumen-cliente');
+
+// Curva: la cruz sigue al puntero y se ajusta al dia mas cercano; el tooltip lista las dos series.
+function mostrarTtFilas(titulo, filas, x, y) {
+  ttEl.textContent = '';
+  const b = document.createElement('b'); b.textContent = titulo; ttEl.append(b);
+  filas.forEach(([color, txt]) => {
+    const r = document.createElement('span'); r.style.display = 'flex'; r.style.alignItems = 'center'; r.style.gap = '6px';
+    const k = document.createElement('i'); k.style.cssText = 'width:12px;height:2px;display:inline-block;background:' + color;
+    const t = document.createElement('span'); t.textContent = txt; r.append(k, t); ttEl.append(r);
+  });
+  ttEl.style.display = 'block';
+  const w = ttEl.offsetWidth, h = ttEl.offsetHeight;
+  ttEl.style.left = Math.max(8, Math.min(x + 14, window.innerWidth - w - 8)) + 'px';
+  ttEl.style.top = Math.max(8, y - h - 12 < 8 ? y + 16 : y - h - 12) + 'px';
+}
+function cruzCurva(svg, clientX, clientY, porTeclado) {
+  const d = JSON.parse(svg.dataset.serie), L = +svg.dataset.l, R = +svg.dataset.r, W = +svg.dataset.w, H = +svg.dataset.h;
+  const rect = svg.getBoundingClientRect(), pw = W - L - R;
+  const vx = (clientX - rect.left) / rect.width * W;
+  const k = Math.max(0, Math.min(d.n - 1, Math.round((vx - L) / pw * (d.n - 1))));
+  const x = L + (d.n === 1 ? pw / 2 : pw * k / (d.n - 1));
+  const T = 14, B = 30, ph = H - T - B;
+  const ymax = Math.max(...d.enc, 1), paso = ymax <= 10 ? 2 : ymax <= 50 ? 10 : ymax <= 120 ? 20 : 50, ytop = Math.ceil(ymax / paso) * paso;
+  const Y = v => T + ph - ph * v / ytop;
+  const cruz = svg.querySelector('.cli-cruz'), a = svg.querySelector('.cli-cruz-a'), b = svg.querySelector('.cli-cruz-b');
+  cruz.setAttribute('x1', x); cruz.setAttribute('x2', x); cruz.style.display = '';
+  a.setAttribute('cx', x); a.setAttribute('cy', Y(d.enc[k])); a.style.display = '';
+  b.setAttribute('cx', x); b.setAttribute('cy', Y(d.res[k])); b.style.display = '';
+  const dia = new Date(d.ini + k * 86400000); dia.setHours(12);
+  const filas = [['var(--accent)', d.enc[k] + ' encontrados'], ['var(--ok)', d.res[k] + ' resueltos' + (d.apx[k] ? ' (≈ ' + d.apx[k] + ' con fecha aproximada)' : '')], ['var(--text-muted)', (d.enc[k] - d.res[k]) + ' siguen abiertos']];
+  const sx = porTeclado ? rect.left + x / W * rect.width : clientX, sy = porTeclado ? rect.top : clientY;
+  mostrarTtFilas(dia.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'long' }), filas, sx, sy);
+}
+function ocultarCruz() { zonaCli.querySelectorAll('.cli-cruz,.cli-cruz-a,.cli-cruz-b').forEach(e => e.style.display = 'none'); }
+zonaCli.addEventListener('pointermove', e => {
+  if (e.target.closest('.cli-hit')) { cruzCurva(e.target.closest('svg'), e.clientX, e.clientY, false); return; }
+  ocultarCruz();
+  const el = e.target.closest('[data-v]'); el ? mostrarTt(el, e.clientX, e.clientY) : ocultarTt();
+});
+zonaCli.addEventListener('pointerleave', () => { ocultarTt(); ocultarCruz(); });
+zonaCli.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('cli-hit')) { const r = e.target.getBoundingClientRect(); cruzCurva(e.target.closest('svg'), r.right, r.top, true); return; } const el = e.target.closest('[data-v]'); if (el) { const r = el.getBoundingClientRect(); mostrarTt(el, r.left + r.width / 2, r.top); } });
+let temporizadorAncho = null;
+window.addEventListener('resize', () => { clearTimeout(temporizadorAncho); temporizadorAncho = setTimeout(() => { ultimoHtmlCliente = ''; if (ultimoData) renderCliente(); }, 150); });
+zonaCli.addEventListener('focusout', () => { ocultarTt(); ocultarCruz(); });
+
 function renderTodo() {
   if (!ultimoData) return;
   renderTabs();
@@ -1093,6 +1477,7 @@ function renderTodo() {
     <div class="seg-ok" style="width:${r.pct_aprobados}%"></div>
     <div class="seg-fail" style="width:${r.pct_rechazados}%"></div>
     <div class="seg-pend" style="width:${r.pct_pendientes}%"></div>`;
+  renderCliente();
 
   const tbodyResp = document.querySelector('#tabla-responsable tbody');
   const porResp = calcularPorResponsable(casos);

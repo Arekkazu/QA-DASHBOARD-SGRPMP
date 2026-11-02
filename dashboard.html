@@ -117,6 +117,7 @@
   .badge.ok { background: var(--ok-bg); color: var(--ok); }
   .badge.fail { background: var(--fail-bg); color: var(--fail); }
   .badge.pend { background: var(--pend-bg); color: var(--pend); }
+  .badge.dif { background: transparent; color: var(--text-muted); border: 1px solid currentColor; font-weight: 500; }
 
   .mini-bar { width: 100px; height: 6px; border-radius: 4px; background: var(--border); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
   .mini-bar > div { height: 100%; background: var(--ok); }
@@ -451,9 +452,11 @@ function moduloDeIncidencia(inc) {
   return match ? parseInt(match[1], 10) : null;
 }
 
-function badgeEstado(estadoTc) {
+function badgeEstado(estadoTc, diferido) {
   const clase = estadoTc === 'Aprobado' ? 'ok' : estadoTc === 'Rechazado' ? 'fail' : 'pend';
-  return `<span class="badge ${clase}">${estadoTc}</span>`;
+  // Diferido: sigue Pendiente en los conteos, pero espera una dependencia externa (diferidos.csv).
+  const dif = diferido ? ` <span class="badge dif" title="${esc(diferido)}">Diferido</span>` : '';
+  return `<span class="badge ${clase}">${estadoTc}</span>${dif}`;
 }
 
 function pctBar(pct) {
@@ -1095,9 +1098,9 @@ function renderCasos() {
       <td>${esc(c.rf)}</td>
       <td>${esc(c.origen)}</td>
       <td class="muted">${esc(c.tipo_reporte)}</td>
-      <td>${badgeEstado(c.estado)}</td>
+      <td>${badgeEstado(c.estado, c.diferido)}</td>
       <td>${esc(c.responsable)}</td>
-      <td>${c.errores && c.errores.length ? `<div class="clamp-wrap"><div class="clamp-text"><ul class="err-list">${c.errores.map(e => `<li class="muted">${esc(e)}</li>`).join('')}</ul></div><button type="button" class="leer-mas-btn" onclick="toggleClamp(this)">Leer más</button></div>` : '<span class="muted">—</span>'}</td>
+      <td>${c.diferido ? `<span class="muted">${esc(c.diferido)}</span>` : c.errores && c.errores.length ? `<div class="clamp-wrap"><div class="clamp-text"><ul class="err-list">${c.errores.map(e => `<li class="muted">${esc(e)}</li>`).join('')}</ul></div><button type="button" class="leer-mas-btn" onclick="toggleClamp(this)">Leer más</button></div>` : '<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('') : '<tr><td colspan="8" class="empty">Sin casos que coincidan con el filtro</td></tr>';
   document.getElementById('conteo-filtrado').textContent = `${filtrados.length} de ${casosDelModulo().length} casos`;

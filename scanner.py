@@ -54,6 +54,7 @@ ASIGNACIONES_CSV = Path(__file__).resolve().parent / "asignaciones.csv"
 DECLARADOS_CSV = Path(__file__).resolve().parent / "declarados_sin_evidencia.csv"
 EVALUADORES_CSV = Path(__file__).resolve().parent / "evaluadores.csv"
 ELIMINADOS_CSV = Path(__file__).resolve().parent / "casos_eliminados.csv"
+DIFERIDOS_CSV = Path(__file__).resolve().parent / "diferidos.csv"
 SIN_ASIGNAR = "Sin asignar"
 
 TC_DIR_RE = re.compile(r"^TC-M0(\d+)-(G?)(\d+)$", re.IGNORECASE)
@@ -816,6 +817,20 @@ def _leer_eliminados() -> set:
         return {_normalizar_tc_id(fila["TC"].strip()) for fila in csv.DictReader(f) if fila.get("TC")}
 
 
+def _leer_diferidos() -> dict:
+    """diferidos.csv: TC (columnas TC,Motivo) que siguen en el plan pero esperan
+    una dependencia externa (ej. un modulo aun sin probar). Siguen contando como
+    Pendiente; el panel solo anade la etiqueta y el motivo. Si el caso llega a
+    tener veredicto, el diferido se ignora."""
+    if not DIFERIDOS_CSV.exists():
+        return {}
+    with DIFERIDOS_CSV.open(encoding="utf-8-sig", newline="") as f:
+        return {
+            _normalizar_tc_id(fila["TC"].strip()): fila.get("Motivo", "").strip()
+            for fila in csv.DictReader(f) if fila.get("TC")
+        }
+
+
 def _leer_asignaciones() -> dict:
     """Lee asignaciones.csv (TC -> Responsable) para poder mostrar cuantos
     casos ha ejecutado cada quien. Si el archivo no existe todavia, todos
@@ -990,6 +1005,7 @@ def scan() -> dict:
     resultados = _deduplicar_por_tc(resultados)
     eliminados = _leer_eliminados()
     resultados = [r for r in resultados if r.tc_id not in eliminados]
+    diferidos = _leer_diferidos()
 
     total_tcs = len(resultados)
     aprobados = sum(1 for r in resultados if r.estado == "Aprobado")
@@ -1041,6 +1057,7 @@ def scan() -> dict:
                 "failed": r.failed, "estado": r.estado, "carpeta": r.carpeta,
                 "responsable": r.responsable,
                 "errores": r.errores[:5],
+                "diferido": diferidos.get(r.tc_id, "") if r.estado == "Pendiente" else "",
             }
             for r in sorted(resultados, key=lambda r: (r.estado != "Rechazado", r.rf, r.tc_id))
         ],

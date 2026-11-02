@@ -598,6 +598,7 @@ def _parsear_candidatos(candidatos: list) -> dict:
     # una corrida vieja haya dejado un formato "mas confiable" (ej. TC-M09-G90:
     # mochawesome.html que paso, y un .txt posterior de Cypress que fallo).
     mejor = None
+    vacio = None
     for p in candidatos:
         parsers = _PARSERS_POR_EXT.get(p.suffix.lower())
         if not parsers:
@@ -608,6 +609,13 @@ def _parsear_candidatos(candidatos: list) -> dict:
         for tipo, fn in parsers:
             parsed = fn(texto)
             if not parsed:
+                continue
+            # Un HTML de Newman sin ninguna asercion legible (total 0) no es un
+            # veredicto: si lo aceptamos tapa el resultado.json de la misma corrida
+            # (ej. TC-M04-G059: 5 casos APROBADO en resultado.json). Se sigue
+            # buscando y solo se usa si no aparece nada mejor.
+            if tipo == "newman-htmlextra" and not parsed.get("total"):
+                vacio = vacio or {**parsed, "tipo_reporte": tipo}
                 continue
             if mejor is None:
                 mejor = {**parsed, "tipo_reporte": tipo}
@@ -627,6 +635,8 @@ def _parsear_candidatos(candidatos: list) -> dict:
 
     if mejor:
         return mejor
+    if vacio:
+        return vacio
     if candidatos:
         return {"total": 0, "passed": 0, "failed": 0, "errores": [], "tipo_reporte": "no_reconocido"}
     return {"total": 0, "passed": 0, "failed": 0, "errores": [], "tipo_reporte": "sin_datos"}

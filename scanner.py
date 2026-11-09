@@ -58,7 +58,7 @@ DIFERIDOS_CSV = Path(__file__).resolve().parent / "diferidos.csv"
 SIN_ASIGNAR = "Sin asignar"
 
 TC_DIR_RE = re.compile(r"^TC-M0(\d+)-(G?)(\d+)$", re.IGNORECASE)
-RF_DIR_RE = re.compile(r"^RF-(\d+)$", re.IGNORECASE)
+RF_DIR_RE = re.compile(r"^RF-(\d+|COT)$", re.IGNORECASE)
 
 
 @dataclass
@@ -213,6 +213,44 @@ def _parse_resultado_run(texto: str) -> Optional[dict]:
     ]
     if not rechazados and len(aprobados) < len(casos):
         return {"total": 0, "passed": 0, "failed": 0, "errores": []}
+    return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
+
+
+def _parse_resultado_ejecucion_html(texto: str) -> Optional[dict]:
+    """resultado_ejecucion_<TC>.html de M06 (RF-88/89/90/COT, QA de Laura Lopez):
+    una tabla con la columna Estado por subcaso (APROBADO / RECHAZADO /
+    BLOQUEADO / REQUIERE ACLARACION) o, si el caso es un solo subcaso, una fila
+    `Estado`. Igual que resultado-run: un RECHAZADO rechaza el caso; BLOQUEADO y
+    REQUIERE ACLARACION no son aprobacion, asi que sin RECHAZADO pero con algun
+    subcaso no aprobado el caso queda Pendiente."""
+    if "<title>TC-M06-" not in texto:
+        return None
+    def limpio(c: str) -> str:
+        return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", c)).strip().upper()
+    estados, motivos = [], []
+    for tabla in re.findall(r"<table.*?</table>", texto, flags=re.S | re.I):
+        filas = [re.findall(r"<t[hd][^>]*>(.*?)</t[hd]>", f, flags=re.S | re.I)
+                 for f in re.findall(r"<tr.*?</tr>", tabla, flags=re.S | re.I)]
+        if not filas:
+            continue
+        cab = [limpio(c) for c in filas[0]]
+        if "SUBCASO" in cab and "ESTADO" in cab:
+            i = cab.index("ESTADO")
+            for f in filas[1:]:
+                if len(f) > i:
+                    estados.append(limpio(f[i]))
+                    motivos.append(limpio(f[0]) + ": " + (limpio(f[cab.index("MOTIVO")]) if "MOTIVO" in cab and len(f) > cab.index("MOTIVO") else ""))
+        else:
+            for f in filas:
+                if len(f) == 2 and limpio(f[0]) == "ESTADO":
+                    estados.append(limpio(f[1]))
+    if not estados:
+        return None
+    rechazados = [i for i, e in enumerate(estados) if e in ("RECHAZADO", "FALLIDO", "FALLA")]
+    aprobados = [e for e in estados if e == "APROBADO"]
+    if not rechazados and len(aprobados) < len(estados):
+        return {"total": 0, "passed": 0, "failed": 0, "errores": []}
+    errores = [(motivos[i] if i < len(motivos) else "RECHAZADO")[:220] for i in rechazados]
     return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
 
 
@@ -582,6 +620,7 @@ _PARSERS_POR_EXT = {
         ("pytest-html", _parse_pytest_html),
         ("newman-htmlextra", _parse_newman_htmlextra),
         ("mochawesome-html", _parse_mochawesome_html),
+        ("resultado-ejecucion", _parse_resultado_ejecucion_html),
     ],
     ".txt": [
         ("cypress-consola", _parse_cypress_consola),
@@ -767,7 +806,7 @@ def _modulo_de_id(id_incidencia: str) -> Optional[int]:
 
 def _leer_incidencias() -> tuple[list, dict]:
     """Incidencias de todos los modulos y el estado de la lectura de Taiga.
-    Los modulos de taiga.MODULOS (3 y 4) salen de Taiga; el resto, de
+    Los modulos de taiga.MODULOS (3 a 6) salen de Taiga; el resto, de
     incidencias.csv. Si Taiga esta apagado o no hay nada que mostrar de ahi
     (ni del ultimo intento bueno), esos modulos se leen del CSV."""
     filas = []

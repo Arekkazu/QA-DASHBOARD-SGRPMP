@@ -1,5 +1,5 @@
 """
-Incidencias de los modulos 3 y 4 leidas en vivo desde Taiga (Issues).
+Incidencias de los modulos 3, 4, 5 y 6 leidas en vivo desde Taiga (Issues).
 
 El resto de modulos (1, 2, 9) siguen saliendo de incidencias.csv. Aqui cada
 issue de Taiga se convierte a las mismas columnas del CSV para que el
@@ -10,10 +10,10 @@ autenticacion. Si se define TAIGA_TOKEN (token de aplicacion/personal, nunca
 en el codigo) se envia como Bearer.
 
 Variables de entorno (todas opcionales):
-    TAIGA_ENABLED      "0" apaga la integracion (modulos 3/4 vuelven al CSV)
+    TAIGA_ENABLED      "0" apaga la integracion (modulos 3 a 6 vuelven al CSV)
     TAIGA_API_URL      https://api.taiga.io/api/v1
     TAIGA_PROJECT_ID   1771570
-    TAIGA_MODULOS      "3,4"
+    TAIGA_MODULOS      "3,4,5,6"
     TAIGA_TOKEN        token Bearer
     TAIGA_EXCLUIR      reportantes cuyas incidencias NO se muestran, separados
                        por ";" (por defecto: Miguel Angel Ortiz Escobar)
@@ -38,7 +38,7 @@ from pathlib import Path
 API = os.environ.get("TAIGA_API_URL", "https://api.taiga.io/api/v1").rstrip("/")
 PROJECT_ID = os.environ.get("TAIGA_PROJECT_ID", "1771570")
 PROJECT_SLUG = "danielruiz7514-proyecto-integrador-iii-2026-1"
-MODULOS = {int(m) for m in os.environ.get("TAIGA_MODULOS", "3,4").split(",") if m.strip()}
+MODULOS = {int(m) for m in os.environ.get("TAIGA_MODULOS", "3,4,5,6").split(",") if m.strip()}
 TOKEN = os.environ.get("TAIGA_TOKEN", "")
 HABILITADO = os.environ.get("TAIGA_ENABLED", "1") != "0"
 CACHE = Path(
@@ -183,7 +183,7 @@ def _guardar_cache(cache: dict) -> None:
 def traer_incidencias() -> tuple[list[dict], dict]:
     """Devuelve (filas, estado). `estado` alimenta la linea de fuentes del
     dashboard: {repo, ok, error?, total, omitidas}. Si Taiga no responde se
-    devuelven las filas del ultimo intento bueno para no vaciar M03/M04."""
+    devuelven las filas del ultimo intento bueno para no vaciar M03 a M06."""
     if not HABILITADO:
         return [], {"repo": "Taiga (desactivado)", "ok": True, "total": 0, "omitidas": [], "desactivado": True}
     cache = _leer_cache()
@@ -230,13 +230,13 @@ def traer_incidencias() -> tuple[list[dict], dict]:
             filas.append(_a_fila(i, p, descripciones.get(str(i["ref"]), {}).get("description", ""), nombres, attrs))
         _guardar_cache({"descripciones": {str(i["ref"]): descripciones[str(i["ref"])] for i, _ in elegidos},
                         "ultimo_ok": filas, "ultimo_ok_en": datetime.now().isoformat(timespec="seconds")})
-        return filas, {"repo": "Taiga (M03/M04)", "ok": True, "total": len(filas), "omitidas": omitidas,
+        return filas, {"repo": "Taiga (M03-M06)", "ok": True, "total": len(filas), "omitidas": omitidas,
                         "excluidas_por_reportante": excluidas}
     except Exception as exc:  # red caida, 5xx, JSON inesperado...
         filas = cache.get("ultimo_ok", [])
         desde = cache.get("ultimo_ok_en", "")
         aviso = f"no se pudo leer Taiga ({exc}); " + (f"se muestran los datos de {desde}" if filas else "sin datos previos")
-        return filas, {"repo": "Taiga (M03/M04)", "ok": False, "error": aviso, "total": len(filas), "omitidas": []}
+        return filas, {"repo": "Taiga (M03-M06)", "ok": False, "error": aviso, "total": len(filas), "omitidas": []}
 
 
 if __name__ == "__main__":

@@ -254,6 +254,60 @@ def _parse_resultado_ejecucion_html(texto: str) -> Optional[dict]:
     return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
 
 
+def _parse_resumen_m06_json(texto: str) -> Optional[dict]:
+    """resumen_*.json de M06 (QA de Laura Lopez), incluidas las carpetas
+    `ultima_evaluacion*` donde el reporte HTML ya no lleva `<title>TC-M06-...`
+    ni la columna Estado (TC-M06-G95/99/100/102/103/108 salian Pendiente aunque
+    la ultima evaluacion estaba aprobada). Veredicto, en este orden: estado de
+    cada `subcasos[]`, conteos aprobados/rechazados|fallidos/bloqueados, o el
+    texto `dictamen_general`/`resultado`/`estado`. Misma regla que el HTML: un
+    RECHAZADO rechaza; BLOQUEADO o REQUIERE ACLARACION sin rechazo = Pendiente.
+    Si QA marca `caso_completo_aprobado` o `caso_completo_reclasificado` en
+    false, el caso no se aprueba (ej. TC-M06-G102: solo se re-ejecuto 16-18)."""
+    try:
+        d = json.loads(texto)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(d, dict) or not str(d.get("caso", "")).startswith("TC-M06-"):
+        return None
+
+    def est(v) -> str:
+        e = re.sub(r"\s+", " ", str(v or "")).strip().upper()
+        # "APROBADO 2/2" (TC-M06-G115): aprobado solo si cubre todos los
+        # subcasos (n == m). "APROBADO 1/2" sigue sin ser aprobacion (Pendiente).
+        m = re.fullmatch(r"APROBADO (\d+) ?/ ?(\d+)", e)
+        return "APROBADO" if m and m.group(1) == m.group(2) and int(m.group(2)) > 0 else e
+
+    estados, motivos = [], []
+    sub = d.get("subcasos")
+    if isinstance(sub, list) and sub and all(isinstance(s, dict) for s in sub):
+        for s in sub:
+            e = est(s.get("estado") or s.get("resultado") or s.get("dictamen"))
+            if e:
+                estados.append(e)
+                motivos.append(f"{s.get('subcaso', '')}: {s.get('motivo', '')}")
+    if not estados:
+        def n(k: str) -> int:
+            v = d.get(k)
+            return v if isinstance(v, int) and not isinstance(v, bool) else 0
+        estados = (["APROBADO"] * n("aprobados") + ["RECHAZADO"] * max(n("rechazados"), n("fallidos"))
+                   + ["BLOQUEADO"] * n("bloqueados") + ["REQUIERE ACLARACION"] * n("requiere_aclaracion"))
+    if not estados:
+        for k in ("dictamen_general", "resultado", "estado"):
+            if isinstance(d.get(k), str) and d[k].strip():
+                estados = [est(d[k])]
+                break
+    if not estados:
+        return None
+    rechazados = [i for i, e in enumerate(estados) if e in ("RECHAZADO", "FALLIDO", "FALLA")]
+    aprobados = [e for e in estados if e == "APROBADO"]
+    incompleto = d.get("caso_completo_aprobado") is False or d.get("caso_completo_reclasificado") is False
+    if not rechazados and (len(aprobados) < len(estados) or incompleto):
+        return {"total": 0, "passed": 0, "failed": 0, "errores": []}
+    errores = [(motivos[i] if i < len(motivos) else "RECHAZADO")[:220] for i in rechazados]
+    return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
+
+
 def _mochawesome_desde_dict(data) -> Optional[dict]:
     if not isinstance(data, dict):
         return None
@@ -496,7 +550,8 @@ def _es_candidato_valido(p: Path, es_raiz_tc: bool) -> bool:
     if p.suffix.lower() not in (".json", ".html", ".txt", ".xml"):
         return False
     if not es_raiz_tc:
-        return "node_modules" not in p.parts
+        # soporte_preparacion/ = evidencia de montaje del escenario (M06), no el veredicto.
+        return "node_modules" not in p.parts and "soporte_preparacion" not in p.parts
     if p.name in _ARCHIVOS_NO_REPORTE:
         return False
     if p.name.endswith((".postman_collection.json", ".cy.ts", ".cy.js")):
@@ -522,6 +577,9 @@ _PATRONES_RANGO_REINTENTO = [
 ]
 
 
+_ULTIMA_EVALUACION = re.compile(r"ultima[_\- ]evaluacion", re.IGNORECASE)
+
+
 def _rango_version(p: Path) -> int:
     """Estima que tan 'final' es un nombre de archivo entre varios reportes
     del mismo TC (reintento2 > reintento, v2.0 > v1, DEFINITIVO > parte2...).
@@ -534,6 +592,10 @@ def _rango_version(p: Path) -> int:
     que tambien fallo, en vez de reintento2, el que de verdad paso)."""
     nombre = p.name
     rango = 0
+    # M06 guarda primera_evaluacion/ y ultima_evaluacion*/ lado a lado; la ultima
+    # (carpeta o nombre de archivo) es la vigente y le gana a la primera.
+    if any(_ULTIMA_EVALUACION.search(x) for x in (nombre, p.parent.name)):
+        rango = 500
     for patron in _PATRONES_RANGO_REINTENTO:
         m = patron.search(nombre)
         if not m:
@@ -615,6 +677,7 @@ _PARSERS_POR_EXT = {
         ("mochawesome", _parse_mochawesome),
         ("k6-resumen", _parse_k6_resumen),
         ("resultado-run", _parse_resultado_run),
+        ("resumen-m06", _parse_resumen_m06_json),
     ],
     ".html": [
         ("pytest-html", _parse_pytest_html),

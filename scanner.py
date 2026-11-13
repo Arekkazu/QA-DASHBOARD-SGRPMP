@@ -268,7 +268,8 @@ def _parse_resumen_m06_json(texto: str) -> Optional[dict]:
         d = json.loads(texto)
     except json.JSONDecodeError:
         return None
-    if not isinstance(d, dict) or not str(d.get("caso", "")).startswith("TC-M06-"):
+    # estado_final_<TC>.json de cierre (TC-M06-G96): identifica el caso con "grupo" en vez de "caso".
+    if not isinstance(d, dict) or not str(d.get("caso") or d.get("grupo") or "").startswith("TC-M06-"):
         return None
 
     def est(v) -> str:
@@ -292,11 +293,27 @@ def _parse_resumen_m06_json(texto: str) -> Optional[dict]:
             return v if isinstance(v, int) and not isinstance(v, bool) else 0
         estados = (["APROBADO"] * n("aprobados") + ["RECHAZADO"] * max(n("rechazados"), n("fallidos"))
                    + ["BLOQUEADO"] * n("bloqueados") + ["REQUIERE ACLARACION"] * n("requiere_aclaracion"))
+    if not estados and isinstance(d.get("resumen_conteos"), dict):
+        c = d["resumen_conteos"]
+        def cn(k: str) -> int:
+            v = c.get(k)
+            return v if isinstance(v, int) and not isinstance(v, bool) else 0
+        estados = ["APROBADO"] * cn("pass") + ["RECHAZADO"] * cn("fail") + ["BLOQUEADO"] * cn("blocked")
     if not estados:
-        for k in ("dictamen_general", "resultado", "estado"):
+        for k in ("dictamen_general", "resultado", "estado", "estado_final"):
             if isinstance(d.get(k), str) and d[k].strip():
                 estados = [est(d[k])]
                 break
+    if not estados:
+        # Cierre "vigente" (TC-M06-G117): subcasos es solo la lista de ids y el veredicto de cada
+        # escenario esta en escenarios[].estado.
+        esc = d.get("escenarios")
+        if isinstance(esc, list) and esc and all(isinstance(x, dict) for x in esc):
+            for x in esc:
+                e = est(x.get("estado") or x.get("resultado") or x.get("dictamen"))
+                if e:
+                    estados.append(e)
+                    motivos.append(f"{x.get('subcaso', '')}: {x.get('motivo', '')}")
     if not estados:
         return None
     rechazados = [i for i, e in enumerate(estados) if e in ("RECHAZADO", "FALLIDO", "FALLA")]
@@ -578,6 +595,16 @@ _PATRONES_RANGO_REINTENTO = [
 
 
 _ULTIMA_EVALUACION = re.compile(r"ultima[_\- ]evaluacion", re.IGNORECASE)
+# M06 (QA de Juan Esteban): la reevaluacion vive en <TC>/EvaluacionV2/Resultados/RUN-...-V2-.../ junto a
+# <TC>/Resultados/RUN-...-V1-.../. La version mas alta es la vigente.
+_EVALUACION_VERSION = re.compile(r"^evaluacion[_\- ]?v(\d+)$", re.IGNORECASE)
+# Solo M06: M02 y M09 tambien tienen EvaluacionV2/V3/V4, pero su historial de reevaluaciones no se ha
+# revisado contra el dashboard (leerlas voltea veredictos de otros QA), asi que no se tocan aqui.
+_MODULOS_CON_EVALUACION_V = ("Test_Modulo6",)
+
+
+def _usa_evaluacion_v(p: Path) -> bool:
+    return any(parte in _MODULOS_CON_EVALUACION_V for parte in p.parts)
 
 
 def _rango_version(p: Path) -> int:
@@ -596,6 +623,14 @@ def _rango_version(p: Path) -> int:
     # (carpeta o nombre de archivo) es la vigente y le gana a la primera.
     if any(_ULTIMA_EVALUACION.search(x) for x in (nombre, p.parent.name)):
         rango = 500
+    # estado_final_<TC>.json: el cierre que publica QA (M06) le gana al historico de la primera evaluacion.
+    if nombre.lower().startswith("estado_final"):
+        rango = max(rango, 550)
+    if _usa_evaluacion_v(p):
+        for carpeta in p.parts:
+            v = _EVALUACION_VERSION.match(carpeta)
+            if v:
+                rango = max(rango, 600 + int(v.group(1)))
     for patron in _PATRONES_RANGO_REINTENTO:
         m = patron.search(nombre)
         if not m:
@@ -643,6 +678,10 @@ def _recolectar_candidatos(tc_dir: Path, resultados_dir: Optional[Path], fechas_
     candidatos = []
     if resultados_dir is not None:
         candidatos += [p for p in resultados_dir.rglob("*") if p.is_file() and _es_candidato_valido(p, False)]
+    # Carpetas EvaluacionV<n>/ (reevaluaciones de M06) al lado de Resultados/.
+    for sub in (tc_dir.iterdir() if _usa_evaluacion_v(tc_dir) else ()):
+        if sub.is_dir() and _EVALUACION_VERSION.match(sub.name):
+            candidatos += [p for p in sub.rglob("*") if p.is_file() and _es_candidato_valido(p, False)]
     # Algunos TC guardan el reporte directo en la raiz de su carpeta, sin
     # subcarpeta Resultados/RESULTADOS (ej. TC-M01-31).
     candidatos += [p for p in tc_dir.glob("*") if p.is_file() and _es_candidato_valido(p, True)]

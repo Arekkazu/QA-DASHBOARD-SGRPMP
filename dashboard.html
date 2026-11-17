@@ -212,8 +212,6 @@
   .cli-pista > div { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; outline: none; transition: filter .12s; }
   .cli-pista > div:hover, .cli-pista > div:focus-visible { filter: brightness(1.12); }
   .cli-pista > div:focus-visible { box-shadow: inset 0 0 0 2px var(--text); }
-  .cli-curva { width: 100%; height: auto; display: block; margin-top: 4px; overflow: visible; }
-  .cli-curva .cli-hit:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
   .cli-tabla summary { cursor: pointer; font-size: 12px; color: var(--text-muted); margin-top: 8px; width: fit-content; }
   .cli-tabla table { margin-top: 6px; font-size: 12px; }
   .cli-tabla th, .cli-tabla td { padding: 5px 8px; }
@@ -1146,20 +1144,12 @@ const AREAS_CLIENTE = {
   3: ['Sensores y alertas', 'Lecturas de los sensores y avisos cuando algo se sale de lo normal'],
   4: ['Salud y predicción con IA', 'Detección de enfermedades y riesgo de contagio'],
   5: ['Insumos y suministros', 'Alimentos, insumos y sus costos'],
+  6: ['Valoración contable de los activos', 'Cuánto valen los animales y la producción, sus costos y los informes financieros'],
   9: ['Fincas y configuración', 'Fincas, corrales o estanques, especies y dispositivos'],
 };
 function nombreArea(n) { return (AREAS_CLIENTE[n] || ['Módulo ' + n])[0]; }
 function detalleArea(n) { return (AREAS_CLIENTE[n] || [null, ''])[1] || ''; }
 
-// Acepta 2026-10-27 y 27/10/2026.
-function parseFechaInc(txt) {
-  const t = (txt || '').trim();
-  let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
-  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
-  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
-  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
-  return null;
-}
 function tt(valor, etiqueta) {
   return ` data-v="${esc(valor)}" data-l="${esc(etiqueta)}" tabindex="0"`;
 }
@@ -1175,96 +1165,6 @@ function tablaGemela(titulos, filas) {
 }
 function leyendaEstado() {
   return `<div class="cli-leyenda"><span><i style="background:var(--ok)"></i>✓ Funciona</span><span><i style="background:var(--fail)"></i>✕ Con fallas</span><span><i style="background:var(--pend)"></i>○ Sin probar aún</span></div>`;
-}
-
-// Curva acumulada de problemas encontrados y resueltos. Las incidencias cerradas sin fecha real de
-// correccion se ubican de forma APROXIMADA: fecha de deteccion + mediana de dias de las que si la tienen.
-const FECHA_MIN_CURVA = new Date(2026, 7, 1);   // antes de esto casi seguro es un error de digitacion (p. ej. año 2025)
-function diasEntre(a, b) { return Math.round((b - a) / 86400000); }
-function sumarDias(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
-function corta(d) { return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'short' }).replace('.', ''); }
-function htmlCurva(incs, alcance) {
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  const datos = []; let sinFecha = 0;
-  incs.forEach(i => {
-    const det = parseFechaInc(i['Fecha deteccion']);
-    if (!det || det < FECHA_MIN_CURVA || det > hoy) { sinFecha++; return; }
-    const real = parseFechaInc(i['Fecha correccion real']);
-    datos.push({ det, cerrada: estaCerrada(i), real: real && real >= det && real <= hoy ? real : null });
-  });
-  // La mediana se calcula con TODAS las incidencias (no solo las del modulo elegido) para que no cambie al cambiar de pestaña.
-  const durReales = [];
-  ultimoData.incidencias.forEach(i => {
-    const d0 = parseFechaInc(i['Fecha deteccion']), r0 = parseFechaInc(i['Fecha correccion real']);
-    if (estaCerrada(i) && d0 && r0 && d0 >= FECHA_MIN_CURVA && r0 >= d0 && r0 <= hoy) durReales.push(diasEntre(d0, r0));
-  });
-  durReales.sort((a, b) => a - b);
-  const mediana = durReales.length ? durReales[Math.floor(durReales.length / 2)] : 6;
-  let aprox = 0;
-  datos.forEach(d => {
-    if (!d.cerrada) { d.fin = null; return; }
-    if (d.real) { d.fin = d.real; return; }
-    const est = sumarDias(d.det, mediana);
-    d.fin = est > hoy ? hoy : est; d.aprox = true; aprox++;
-  });
-  const cerradas = datos.filter(d => d.cerrada).length;
-  const nota = sinFecha ? ` ${sinFecha} ${sinFecha === 1 ? 'problema no aparece' : 'problemas no aparecen'} en la curva por no tener una fecha de detección confiable.` : '';
-  const dias = mediana === 1 ? '1 día' : mediana + ' días';
-  const aviso = aprox
-    ? `<b>Las fechas de cierre son aproximadas</b> en ${aprox} de ${cerradas} corregidos: no se anotó el día real, así que se estimó como el día en que se encontró + ${dias} (el tiempo típico, la mediana, que tardaron en resolverse los que sí tienen fecha).`
-    : 'Todos los cierres tienen su fecha real.';
-  const sub = `Los problemas encontrados y los ya corregidos, sumados día a día en ${esc(alcance)}. La distancia entre las dos líneas son los problemas que siguen abiertos. ${aviso}${esc(nota)}`;
-  if (!datos.length) return `<div class="cli-card ancho"><h3>¿Vamos resolviendo los problemas?</h3><p class="sub">${sub}</p><div class="cli-vacio">No hay problemas con fecha para dibujar.</div></div>`;
-
-  const ini = new Date(Math.min(...datos.map(d => d.det)));
-  const n = diasEntre(ini, hoy) + 1;
-  const enc = new Array(n).fill(0), res = new Array(n).fill(0), apx = new Array(n).fill(0);
-  datos.forEach(d => {
-    enc[diasEntre(ini, d.det)]++;
-    if (d.fin) { const k = diasEntre(ini, d.fin); res[k]++; if (d.aprox) apx[k]++; }
-  });
-  for (let k = 1; k < n; k++) { enc[k] += enc[k - 1]; res[k] += res[k - 1]; apx[k] += apx[k - 1]; }
-
-  const ancho = document.getElementById('cli-grid').clientWidth || 940;   // ancho real: el texto no se escala
-  const W = Math.max(320, Math.min(1100, ancho - 66)), H = W < 520 ? 230 : 270, L = 38, R = W < 520 ? 104 : 128, T = 14, B = 30, pw = W - L - R, ph = H - T - B;
-  const ymax = Math.max(...enc, 1), paso = ymax <= 10 ? 2 : ymax <= 50 ? 10 : ymax <= 120 ? 20 : 50, ytop = Math.ceil(ymax / paso) * paso;
-  const X = k => L + (n === 1 ? pw / 2 : pw * k / (n - 1)), Y = v => T + ph - ph * v / ytop;
-  const linea = arr => arr.map((v, k) => (k ? 'L' : 'M') + X(k).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
-  let rejilla = '';
-  for (let v = 0; v <= ytop; v += paso) rejilla += `<line x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="1"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-muted)">${v}</text>`;
-  const marcas = Math.min(6, n); let ejeX = '';
-  for (let m = 0; m < marcas; m++) {
-    const k = marcas === 1 ? 0 : Math.round((n - 1) * m / (marcas - 1));
-    ejeX += `<text x="${X(k)}" y="${H - 8}" text-anchor="${m === 0 ? 'start' : m === marcas - 1 ? 'end' : 'middle'}" font-size="11" fill="var(--text-muted)">${esc(corta(sumarDias(ini, k)))}</text>`;
-  }
-  const fin = n - 1;
-  const punto = (v, col) => `<circle cx="${X(fin)}" cy="${Y(v)}" r="4.5" fill="${col}" stroke="var(--card-bg)" stroke-width="2"/>`;
-  const etiqueta = (v, txt, dy) => `<text x="${X(fin) + 10}" y="${Y(v) + dy}" font-size="12" fill="var(--text)"><tspan font-weight="600">${v}</tspan> ${esc(txt)}</text>`;
-  const sepY = Math.abs(Y(enc[fin]) - Y(res[fin])) < 16 ? 8 : 0;
-  const serie = JSON.stringify({ ini: ini.getTime(), n, enc, res, apx });
-  const svg = `<svg class="cli-curva" viewBox="0 0 ${W} ${H}" role="img" aria-label="Problemas encontrados y resueltos acumulados: ${enc[fin]} encontrados y ${res[fin]} resueltos hasta hoy" data-serie="${esc(serie)}" data-l="${L}" data-r="${R}" data-w="${W}" data-h="${H}">
-    ${rejilla}${ejeX}
-    <path d="${linea(enc)}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <path d="${linea(res)}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${punto(enc[fin], 'var(--accent)')}${punto(res[fin], 'var(--ok)')}
-    ${etiqueta(enc[fin], 'encontrados', -sepY)}${etiqueta(res[fin], 'resueltos', 4 + sepY)}
-    <line class="cli-cruz" x1="0" x2="0" y1="${T}" y2="${T + ph}" stroke="var(--text-muted)" stroke-width="1" style="display:none"/>
-    <circle class="cli-cruz-a" r="4.5" fill="var(--accent)" stroke="var(--card-bg)" stroke-width="2" style="display:none"/>
-    <circle class="cli-cruz-b" r="4.5" fill="var(--ok)" stroke="var(--card-bg)" stroke-width="2" style="display:none"/>
-    <rect class="cli-hit" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent" tabindex="0"/>
-  </svg>`;
-  // tabla gemela: un renglon por semana (y el dia de hoy)
-  const filas = [];
-  for (let k = 0; k < n; k += 7) filas.push(k);
-  if (filas[filas.length - 1] !== fin) filas.push(fin);
-  const tabla = tablaGemela(['Hasta el día', 'Encontrados (acumulado)', 'Resueltos (acumulado)', 'Siguen abiertos'],
-    filas.map(k => [sumarDias(ini, k).toLocaleDateString('es-CO'), enc[k], res[k] + (apx[k] ? ' (≈ ' + apx[k] + ' con fecha aproximada)' : ''), enc[k] - res[k]]));
-  return `<div class="cli-card ancho">
-    <h3>¿Vamos resolviendo los problemas?</h3>
-    <p class="sub">${sub}</p>
-    <div class="cli-leyenda"><span><i style="background:var(--accent)"></i>Encontrados (acumulado)</span><span><i style="background:var(--ok)"></i>Resueltos (acumulado${aprox ? ', fechas aproximadas' : ''})</span></div>
-    ${svg}${tabla}
-  </div>`;
 }
 
 // Funcionalidades del sistema, una por requerimiento, con nombre de campo. El estado sale de las pruebas:
@@ -1290,6 +1190,15 @@ const FUNCIONES_CLIENTE = {
       ['RF-67', 'Historial de diagnósticos de cada animal'], ['RF-68', 'Estimar el riesgo de contagio'], ['RF-69', 'Validar y llevar versiones de los modelos de IA'],
       ['RF-70', 'Actualizar el modelo de IA en los equipos de la finca'], ['RF-71', 'Reentrenar el modelo de IA'], ['RF-72', 'Corrección del veterinario a los diagnósticos'],
       ['RF-73', 'Registro de la actividad del motor de predicción']],
+  5: [['RF-74', 'Calcular cuánto alimento se necesita por kilo ganado (ICA)'], ['RF-75', 'Registrar el consumo de alimentos'], ['RF-76', 'Registrar la aplicación de medicamentos'],
+      ['RF-77', 'Reporte de gastos acumulados'], ['RF-78', 'Calcular el costo directo de cada ciclo'], ['RF-79', 'Provisión y consolidado del ciclo (NIC 41)'],
+      ['RF-80', 'Dejar registro de los cambios en suministros'], ['RF-81', 'Consultar el historial y la trazabilidad de los suministros']],
+  6: [['RF-82', 'Reconocer el valor inicial de un animal o cultivo'], ['RF-83', 'Medir de nuevo su valor razonable con el tiempo'], ['RF-84', 'Calcular el valor menos los costos de venta'],
+      ['RF-85', 'Reconocer el producto en el momento de la cosecha'], ['RF-86', 'Registrar automáticamente las ganancias y pérdidas por cambio de valor'],
+      ['RF-87', 'Cierre mensual y actualización del valor de los activos'], ['RF-88', 'Calcular el valor en libros y evitar valores negativos'],
+      ['RF-89', 'Registrar precios de referencia y sus fuentes'], ['RF-90', 'Registrar costos de mantenimiento (capitalizar o llevar a gasto)'],
+      ['RF-91', 'Verificar la cadena de evidencia contable'], ['RF-92', 'Informe de valoración de los activos biológicos'],
+      ['RF-93', 'Estado de resultados de los activos biológicos'], ['RF-94', 'Repositorio de eventos contables'], ['RF-COT', 'Cotizaciones de precios']],
   9: [['RF-15', 'Catálogo de especies'], ['RF-16', 'Etapas productivas y enfermedades de cada especie'], ['RF-17', 'Límites y niveles de alerta ambiental'],
       ['RF-18', 'Parámetros de funcionamiento del sistema'], ['RF-19', 'Datos de la finca'], ['RF-20', 'Corrales, estanques o áreas de producción'],
       ['RF-21', 'Registrar dispositivos y sensores'], ['RF-22', 'Asociar sensores a corrales o estanques'], ['RF-23', 'Configurar los dispositivos a distancia'],
@@ -1297,6 +1206,23 @@ const FUNCIONES_CLIENTE = {
       ['RF-27', 'Elegir el tema visual (claro u oscuro)'], ['RF-28', 'Personalizar el panel principal'], ['RF-29', 'Elegir el idioma'],
       ['RF-30', 'Ver las plantillas de configuración'], ['RF-31', 'Crear plantillas de configuración'], ['RF-32', 'Aplicar una plantilla a una finca']],
 };
+// Conteo de verificaciones por requisito ("RF-33" -> {ok, fail, pend}). Cada RF pertenece a un solo modulo.
+function cuentaPorRf() {
+  const cuenta = new Map();
+  ultimoData.casos.forEach(c => {
+    const a = cuenta.get(c.rf) || { ok: 0, fail: 0, pend: 0 };
+    if (c.estado === 'Aprobado') a.ok++; else if (c.estado === 'Rechazado') a.fail++; else a.pend++;
+    cuenta.set(c.rf, a);
+  });
+  return cuenta;
+}
+// Funciones [rf, nombre] de un area. Si el area aun no tiene nombres en FUNCIONES_CLIENTE, se usan los RF de sus casos.
+function funcionesDelArea(n) {
+  if (FUNCIONES_CLIENTE[n]) return FUNCIONES_CLIENTE[n];
+  const vistos = new Set();
+  ultimoData.casos.forEach(c => { if (numeroModulo(c.modulo) === n) vistos.add(c.rf); });
+  return Array.from(vistos).sort((a, b) => numeroRF(a) - numeroRF(b) || a.localeCompare(b)).map(rf => [rf, rf]);
+}
 function estadoFuncion(c) {
   const t = c.ok + c.fail + c.pend;
   if (!t) return { txt: 'Aún sin probar', k: 'nada' };
@@ -1305,12 +1231,7 @@ function estadoFuncion(c) {
   return { txt: c.ok ? 'Funciona, con fallas por corregir' : 'Con fallas por corregir', k: 'falla' };
 }
 function htmlFunciones() {
-  const cuentaRf = new Map();   // "RF-33" -> {ok, fail, pend}
-  ultimoData.casos.forEach(c => {
-    const a = cuentaRf.get(c.rf) || { ok: 0, fail: 0, pend: 0 };
-    if (c.estado === 'Aprobado') a.ok++; else if (c.estado === 'Rechazado') a.fail++; else a.pend++;
-    cuentaRf.set(c.rf, a);
-  });
+  const cuentaRf = cuentaPorRf();
   const areas = Object.keys(FUNCIONES_CLIENTE).map(Number).filter(n => estado.modulo === 'Todos' || estado.modulo === n);
   let total = 0, completas = 0, conFallas = 0;
   const bloques = areas.map(n => {
@@ -1355,42 +1276,59 @@ function htmlCliente() {
     if (c.estado === 'Aprobado') a.ok++; else if (c.estado === 'Rechazado') a.fail++; else a.pend++;
     porArea.set(n, a);
   });
-  const areas = Array.from(porArea.keys()).sort((a, b) => a - b);
-  const filasArea = areas.map(n => {
-    const a = porArea.get(n), t = a.ok + a.fail + a.pend, p = t ? Math.round(100 * a.ok / t) : 0;
-    return `<div class="cli-fila"><div class="nom">${esc(nombreArea(n))}<small>${esc(detalleArea(n))}</small></div>
-      ${barraEstado(a.ok, a.fail, a.pend, nombreArea(n))}<div class="val">${p}%<small>${a.ok} de ${t}</small></div></div>`;
+  // Una barra por area ("Todos") o, dentro de una pestaña de modulo, una barra por funcion de ESE modulo (sin mezclar otras areas).
+  const enModulo = estado.modulo !== 'Todos';
+  const cuentaRf = cuentaPorRf();
+  const items = enModulo
+    ? funcionesDelArea(estado.modulo).map(([rf, nombre]) => ({ nom: nombre, det: rf, a: cuentaRf.get(rf) || { ok: 0, fail: 0, pend: 0 } }))
+    : Array.from(porArea.keys()).sort((a, b) => a - b).map(n => ({ nom: nombreArea(n), det: detalleArea(n), a: porArea.get(n) }));
+  const filasArea = items.map(x => {
+    const a = x.a, t = a.ok + a.fail + a.pend, p = t ? Math.round(100 * a.ok / t) : 0;
+    return `<div class="cli-fila"><div class="nom">${esc(x.nom)}<small>${esc(x.det)}</small></div>
+      ${barraEstado(a.ok, a.fail, a.pend, x.nom)}<div class="val">${t ? p + '%' : '–'}<small>${t ? a.ok + ' de ' + t : 'sin pruebas'}</small></div></div>`;
   }).join('');
   const estadoArea = `<div class="cli-card ancho">
     <h3>¿Cómo va cada parte del sistema?</h3>
-    <p class="sub">Cada barra es un área. El número de la derecha es el porcentaje que ya funciona bien. Pase el cursor por una barra para ver cantidades.</p>
+    <p class="sub">${enModulo ? 'Cada barra es una función del área «' + esc(nombreArea(estado.modulo)) + '».' : 'Cada barra es un área.'} El número de la derecha es el porcentaje que ya funciona bien. Pase el cursor por una barra para ver cantidades.</p>
     ${leyendaEstado()}${filasArea || '<div class="cli-vacio">Aún no hay verificaciones.</div>'}
-    ${tablaGemela(['Área', 'Funciona', 'Con fallas', 'Sin probar aún', '% que funciona'], areas.map(n => { const a = porArea.get(n), t = a.ok + a.fail + a.pend; return [nombreArea(n), a.ok, a.fail, a.pend, (t ? Math.round(100 * a.ok / t) : 0) + '%']; }))}
+    ${tablaGemela([enModulo ? 'Función' : 'Área', 'Funciona', 'Con fallas', 'Sin probar aún', '% que funciona'], items.map(x => { const a = x.a, t = a.ok + a.fail + a.pend; return [x.nom, a.ok, a.fail, a.pend, (t ? Math.round(100 * a.ok / t) : 0) + '%']; }))}
   </div>`;
 
   // 2b) Funcionalidades del sistema
   const funciones = htmlFunciones();
 
-  // 3) Curva: problemas encontrados contra resueltos (acumulado). Sigue la pestaña elegida.
-  const curva = htmlCurva(incidenciasDelModulo(), alcance);
-
   // 4) Donde estan los problemas abiertos (todas las areas)
+  // "Todos": por area. En una pestaña de modulo: por funcion de ESE modulo (un problema que cita varios RF cuenta en cada uno).
   const abiertasTodas = ultimoData.incidencias.filter(i => !estaCerrada(i));
-  const conteoArea = new Map();
-  abiertasTodas.forEach(i => { const n = moduloDeIncidencia(i); if (n != null) conteoArea.set(n, (conteoArea.get(n) || 0) + 1); });
-  const listaArea = Array.from(conteoArea.entries()).sort((a, b) => b[1] - a[1]);
+  let listaArea;
+  if (enModulo) {
+    const funcs = funcionesDelArea(estado.modulo), nombres = new Map(funcs);
+    const conteoRf = new Map(); let sinRf = 0;
+    abiertasTodas.filter(i => moduloDeIncidencia(i) === estado.modulo).forEach(i => {
+      const rfs = new Set(((i['RF relacionado'] || '').toUpperCase().match(/RF-(?:\d+|COT)/g) || []).filter(rf => nombres.has(rf)));
+      if (!rfs.size) { sinRf++; return; }
+      rfs.forEach(rf => conteoRf.set(rf, (conteoRf.get(rf) || 0) + 1));
+    });
+    listaArea = Array.from(conteoRf.entries()).map(([rf, c]) => [nombres.get(rf), c]);
+    if (sinRf) listaArea.push(['Sin función indicada', sinRf]);
+    listaArea.sort((a, b) => b[1] - a[1]);
+  } else {
+    const conteoArea = new Map();
+    abiertasTodas.forEach(i => { const n = moduloDeIncidencia(i); if (n != null) conteoArea.set(n, (conteoArea.get(n) || 0) + 1); });
+    listaArea = Array.from(conteoArea.entries()).map(([n, c]) => [nombreArea(n), c]).sort((a, b) => b[1] - a[1]);
+  }
   const maxA = Math.max(1, ...listaArea.map(x => x[1]));
-  const filasDonde = listaArea.map(([n, c]) => `<div class="cli-fila"><div class="nom">${esc(nombreArea(n))}</div>
-      <div class="cli-pista"><div style="width:${Math.max(2, 100 * c / maxA)}%; background:var(--accent)"${tt(c + (c === 1 ? ' problema abierto' : ' problemas abiertos'), nombreArea(n))}></div></div>
+  const filasDonde = listaArea.map(([nom, c]) => `<div class="cli-fila"><div class="nom">${esc(nom)}</div>
+      <div class="cli-pista"><div style="width:${Math.max(2, 100 * c / maxA)}%; background:var(--accent)"${tt(c + (c === 1 ? ' problema abierto' : ' problemas abiertos'), nom)}></div></div>
       <div class="val">${c}</div></div>`).join('');
   const donde = `<div class="cli-card ancho">
     <h3>¿Dónde se concentran los problemas?</h3>
-    <p class="sub">Problemas abiertos en cada área del sistema, de mayor a menor.</p>
+    <p class="sub">${enModulo ? 'Problemas abiertos en cada función del área «' + esc(nombreArea(estado.modulo)) + '», de mayor a menor. Un problema que afecta a varias funciones se cuenta en cada una.' : 'Problemas abiertos en cada área del sistema, de mayor a menor.'}</p>
     ${filasDonde || '<div class="cli-vacio">No hay problemas abiertos. ✓</div>'}
-    ${tablaGemela(['Área', 'Problemas abiertos'], listaArea.map(([n, c]) => [nombreArea(n), c]))}
+    ${tablaGemela([enModulo ? 'Función' : 'Área', 'Problemas abiertos'], listaArea.map(([nom, c]) => [nom, c]))}
   </div>`;
 
-  return hero + funciones + estadoArea + curva + donde;
+  return hero + funciones + estadoArea + donde;
 }
 
 let ultimoHtmlCliente = '';
@@ -1422,49 +1360,14 @@ function mostrarTt(el, x, y) {
 function ocultarTt() { ttEl.style.display = 'none'; }
 const zonaCli = document.getElementById('resumen-cliente');
 
-// Curva: la cruz sigue al puntero y se ajusta al dia mas cercano; el tooltip lista las dos series.
-function mostrarTtFilas(titulo, filas, x, y) {
-  ttEl.textContent = '';
-  const b = document.createElement('b'); b.textContent = titulo; ttEl.append(b);
-  filas.forEach(([color, txt]) => {
-    const r = document.createElement('span'); r.style.display = 'flex'; r.style.alignItems = 'center'; r.style.gap = '6px';
-    const k = document.createElement('i'); k.style.cssText = 'width:12px;height:2px;display:inline-block;background:' + color;
-    const t = document.createElement('span'); t.textContent = txt; r.append(k, t); ttEl.append(r);
-  });
-  ttEl.style.display = 'block';
-  const w = ttEl.offsetWidth, h = ttEl.offsetHeight;
-  ttEl.style.left = Math.max(8, Math.min(x + 14, window.innerWidth - w - 8)) + 'px';
-  ttEl.style.top = Math.max(8, y - h - 12 < 8 ? y + 16 : y - h - 12) + 'px';
-}
-function cruzCurva(svg, clientX, clientY, porTeclado) {
-  const d = JSON.parse(svg.dataset.serie), L = +svg.dataset.l, R = +svg.dataset.r, W = +svg.dataset.w, H = +svg.dataset.h;
-  const rect = svg.getBoundingClientRect(), pw = W - L - R;
-  const vx = (clientX - rect.left) / rect.width * W;
-  const k = Math.max(0, Math.min(d.n - 1, Math.round((vx - L) / pw * (d.n - 1))));
-  const x = L + (d.n === 1 ? pw / 2 : pw * k / (d.n - 1));
-  const T = 14, B = 30, ph = H - T - B;
-  const ymax = Math.max(...d.enc, 1), paso = ymax <= 10 ? 2 : ymax <= 50 ? 10 : ymax <= 120 ? 20 : 50, ytop = Math.ceil(ymax / paso) * paso;
-  const Y = v => T + ph - ph * v / ytop;
-  const cruz = svg.querySelector('.cli-cruz'), a = svg.querySelector('.cli-cruz-a'), b = svg.querySelector('.cli-cruz-b');
-  cruz.setAttribute('x1', x); cruz.setAttribute('x2', x); cruz.style.display = '';
-  a.setAttribute('cx', x); a.setAttribute('cy', Y(d.enc[k])); a.style.display = '';
-  b.setAttribute('cx', x); b.setAttribute('cy', Y(d.res[k])); b.style.display = '';
-  const dia = new Date(d.ini + k * 86400000); dia.setHours(12);
-  const filas = [['var(--accent)', d.enc[k] + ' encontrados'], ['var(--ok)', d.res[k] + ' resueltos' + (d.apx[k] ? ' (≈ ' + d.apx[k] + ' con fecha aproximada)' : '')], ['var(--text-muted)', (d.enc[k] - d.res[k]) + ' siguen abiertos']];
-  const sx = porTeclado ? rect.left + x / W * rect.width : clientX, sy = porTeclado ? rect.top : clientY;
-  mostrarTtFilas(dia.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'long' }), filas, sx, sy);
-}
-function ocultarCruz() { zonaCli.querySelectorAll('.cli-cruz,.cli-cruz-a,.cli-cruz-b').forEach(e => e.style.display = 'none'); }
 zonaCli.addEventListener('pointermove', e => {
-  if (e.target.closest('.cli-hit')) { cruzCurva(e.target.closest('svg'), e.clientX, e.clientY, false); return; }
-  ocultarCruz();
   const el = e.target.closest('[data-v]'); el ? mostrarTt(el, e.clientX, e.clientY) : ocultarTt();
 });
-zonaCli.addEventListener('pointerleave', () => { ocultarTt(); ocultarCruz(); });
-zonaCli.addEventListener('focusin', e => { if (e.target.classList && e.target.classList.contains('cli-hit')) { const r = e.target.getBoundingClientRect(); cruzCurva(e.target.closest('svg'), r.right, r.top, true); return; } const el = e.target.closest('[data-v]'); if (el) { const r = el.getBoundingClientRect(); mostrarTt(el, r.left + r.width / 2, r.top); } });
+zonaCli.addEventListener('pointerleave', ocultarTt);
+zonaCli.addEventListener('focusin', e => { const el = e.target.closest('[data-v]'); if (el) { const r = el.getBoundingClientRect(); mostrarTt(el, r.left + r.width / 2, r.top); } });
 let temporizadorAncho = null;
 window.addEventListener('resize', () => { clearTimeout(temporizadorAncho); temporizadorAncho = setTimeout(() => { ultimoHtmlCliente = ''; if (ultimoData) renderCliente(); }, 150); });
-zonaCli.addEventListener('focusout', () => { ocultarTt(); ocultarCruz(); });
+zonaCli.addEventListener('focusout', ocultarTt);
 
 function renderTodo() {
   if (!ultimoData) return;

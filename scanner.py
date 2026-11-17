@@ -107,7 +107,8 @@ def _find_resultados_dir(tc_dir: Path) -> Optional[Path]:
     return None
 
 
-def _parse_pytest_html(texto: str) -> Optional[dict]:
+def _pytest_html_tests(texto: str) -> Optional[dict]:
+    """{nodeid: [entradas]} del bloque data-jsonblob de un pytest-html, o None."""
     m = re.search(r'data-jsonblob="([^"]*)"', texto)
     if not m:
         return None
@@ -119,8 +120,10 @@ def _parse_pytest_html(texto: str) -> Optional[dict]:
     if not isinstance(data, dict):
         return None
     tests = data.get("tests")
-    if not isinstance(tests, dict):
-        return None
+    return tests if isinstance(tests, dict) else None
+
+
+def _resumir_pytest_tests(tests: dict) -> dict:
     total = passed = failed = 0
     errores = []
     for nombre_test, resultados in tests.items():
@@ -139,6 +142,49 @@ def _parse_pytest_html(texto: str) -> Optional[dict]:
                         linea = lineas_e[0].strip()[2:].strip()
                 errores.append(linea[:220])
     return {"total": total, "passed": passed, "failed": failed, "errores": errores}
+
+
+def _parse_pytest_html(texto: str) -> Optional[dict]:
+    tests = _pytest_html_tests(texto)
+    return None if tests is None else _resumir_pytest_tests(tests)
+
+
+def _generado_pytest_html(texto: str):
+    """Fecha/hora de «Report generated on 13-Nov-2026 at 00:37:55», o None."""
+    m = re.search(r"Report generated on (\d{1,2}-\w{3}-\d{4} at \d{2}:\d{2}:\d{2})", texto)
+    if not m:
+        return None
+    try:
+        return datetime.strptime(m.group(1), "%d-%b-%Y at %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _fusionar_pytest_html_m06(candidatos: list, ganador: Path) -> Optional[dict]:
+    """M06: un TC acumula un reporte del grupo completo (`...-V2.0.html`) y reruns
+    de uno o dos subcasos (`...-031c-V2.0.html`). Tomar UN solo archivo mostraba como
+    rechazado un subcaso que el rerun ya habia aprobado (TC-M06-G07/G08/G20), o
+    escondia el resto del grupo si ganaba el rerun. Aqui se combinan los pytest-html
+    del TC de la misma version (rango) o posterior a la del ganador -- los reportes
+    de una version anterior no cuentan -- y de cada prueba vale su resultado en el
+    reporte generado mas recientemente (sin fecha: el orden de `candidatos`)."""
+    rango_min = _rango_version(ganador)
+    por_prueba: dict = {}  # nodeid -> (clave de recencia, entradas)
+    for orden, p in enumerate(candidatos):
+        if p.suffix.lower() != ".html" or _rango_version(p) < rango_min:
+            continue
+        texto = _leer_texto(p)
+        tests = _pytest_html_tests(texto) if texto else None
+        if not tests:
+            continue
+        generado = _generado_pytest_html(texto) or datetime.min
+        clave = (generado, -orden)  # candidatos va del mas reciente al mas viejo
+        for nodeid, entradas in tests.items():
+            if nodeid not in por_prueba or clave > por_prueba[nodeid][0]:
+                por_prueba[nodeid] = (clave, entradas)
+    if not por_prueba:
+        return None
+    return {**_resumir_pytest_tests({k: v[1] for k, v in por_prueba.items()}), "tipo_reporte": "pytest-html"}
 
 
 def _parse_newman_htmlextra(texto: str) -> Optional[dict]:
@@ -323,6 +369,50 @@ def _parse_resumen_m06_json(texto: str) -> Optional[dict]:
         return {"total": 0, "passed": 0, "failed": 0, "errores": []}
     errores = [(motivos[i] if i < len(motivos) else "RECHAZADO")[:220] for i in rechazados]
     return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
+
+
+def _parse_estado_oficial(texto: str) -> Optional[dict]:
+    """estado_oficial_<TC>.json (M06): el cierre vigente que publica QA para un caso.
+    Manda `dictamen_general` y no lo que digan sus escenarios: un escenario
+    PENDIENTE_CASO_INDEPENDIENTE (RF-93 en TC-M06-G112) esta fuera del alcance del
+    grupo y no debe dejarlo Pendiente. APROBADO y APROBADO_CON_ALCANCE_DELIMITADO
+    aprueban (con `grupo_completo_aprobado: false` el alcance delimitado es la
+    decision de QA, ej. TC-M06-G104); RECHAZADO rechaza; BLOQUEADO / REQUIERE
+    ACLARACION u otro texto = Pendiente (total 0)."""
+    try:
+        d = json.loads(texto)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(d, dict) or not str(d.get("caso") or "").startswith("TC-M06-"):
+        return None
+    dictamen = d.get("dictamen_general")
+    if not isinstance(dictamen, str) or not dictamen.strip():
+        return None
+    dictamen = re.sub(r"\s+", "_", dictamen.strip().upper())
+
+    def n(v) -> int:
+        return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else 0
+
+    ok = fail = 0
+    asers = d.get("aserciones_totales")
+    if isinstance(asers, dict):
+        ok, fail = n(asers.get("ok")), n(asers.get("fail"))
+    if not (ok or fail):
+        for clave in ("escenarios", "subcasos"):
+            lista = d.get(clave)
+            if isinstance(lista, list) and any(isinstance(x, dict) for x in lista):
+                estados = [str(x.get("estado") or x.get("aprobacion") or "").upper() for x in lista if isinstance(x, dict)]
+                ok = sum(e == "APROBADO" for e in estados)
+                fail = sum(e == "RECHAZADO" for e in estados)
+                break
+
+    if dictamen.startswith("APROBADO"):
+        return {"total": max(ok, 1), "passed": max(ok, 1), "failed": 0, "errores": []}
+    if dictamen.startswith("RECHAZADO"):
+        motivo = d.get("motivo_grupo_no_completo") or d.get("motivo") or d.get("nota") or "dictamen oficial: RECHAZADO"
+        f = max(fail, 1)
+        return {"total": ok + f, "passed": ok, "failed": f, "errores": [str(motivo)[:220]]}
+    return {"total": 0, "passed": 0, "failed": 0, "errores": []}
 
 
 def _mochawesome_desde_dict(data) -> Optional[dict]:
@@ -626,6 +716,9 @@ def _rango_version(p: Path) -> int:
     # estado_final_<TC>.json: el cierre que publica QA (M06) le gana al historico de la primera evaluacion.
     if nombre.lower().startswith("estado_final"):
         rango = max(rango, 550)
+    # estado_oficial_<TC>.json: el dictamen vigente de QA (M06); le gana a cualquier reporte o evaluacion anterior.
+    if nombre.lower().startswith("estado_oficial"):
+        rango = max(rango, 900)
     if _usa_evaluacion_v(p):
         for carpeta in p.parts:
             v = _EVALUACION_VERSION.match(carpeta)
@@ -740,6 +833,7 @@ def _parsear_candidatos(candidatos: list) -> dict:
     # una corrida vieja haya dejado un formato "mas confiable" (ej. TC-M09-G90:
     # mochawesome.html que paso, y un .txt posterior de Cypress que fallo).
     mejor = None
+    mejor_ruta = None
     vacio = None
     for p in candidatos:
         parsers = _PARSERS_POR_EXT.get(p.suffix.lower())
@@ -748,6 +842,10 @@ def _parsear_candidatos(candidatos: list) -> dict:
         texto = _leer_texto(p)
         if texto is None:
             continue
+        if p.suffix.lower() == ".json" and p.name.lower().startswith("estado_oficial"):
+            oficial = _parse_estado_oficial(texto)
+            if oficial:
+                return {**oficial, "tipo_reporte": "estado-oficial"}
         for tipo, fn in parsers:
             parsed = fn(texto)
             if not parsed:
@@ -761,6 +859,9 @@ def _parsear_candidatos(candidatos: list) -> dict:
                 continue
             if mejor is None:
                 mejor = {**parsed, "tipo_reporte": tipo}
+                mejor_ruta = p
+                if tipo == "pytest-html" and _usa_evaluacion_v(p):
+                    return _fusionar_pytest_html_m06(candidatos, p) or mejor
                 if tipo != "junit-xml":
                     return mejor
                 break
@@ -771,7 +872,10 @@ def _parsear_candidatos(candidatos: list) -> dict:
             # carpeta que indique un resultado peor, ese otro gana -- igual
             # que la regla de "el peor veredicto gana" al fusionar backend y
             # frontend (_deduplicar_por_tc).
-            if mejor["tipo_reporte"] == "junit-xml" and parsed["failed"] > 0 and mejor["failed"] == 0:
+            # Solo si la corrida mas vieja no es de una version anterior: un _v3 que fallo no
+            # puede tumbar al _v4 que paso (TC-M05-G007/G031, reejecuciones v2..v4).
+            if (mejor["tipo_reporte"] == "junit-xml" and parsed["failed"] > 0 and mejor["failed"] == 0
+                    and _rango_version(p) >= _rango_version(mejor_ruta)):
                 mejor = {**parsed, "tipo_reporte": tipo}
             return mejor
 

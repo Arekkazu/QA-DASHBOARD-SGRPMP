@@ -58,7 +58,7 @@ DIFERIDOS_CSV = Path(__file__).resolve().parent / "diferidos.csv"
 SIN_ASIGNAR = "Sin asignar"
 
 TC_DIR_RE = re.compile(r"^TC-M0(\d+)-(G?)(\d+)$", re.IGNORECASE)
-RF_DIR_RE = re.compile(r"^RF-(\d+|COT)$", re.IGNORECASE)
+RF_DIR_RE = re.compile(r"^RF-(\d+|COT|AE\d+)$", re.IGNORECASE)
 
 
 @dataclass
@@ -298,6 +298,34 @@ def _parse_resultado_ejecucion_html(texto: str) -> Optional[dict]:
         return {"total": 0, "passed": 0, "failed": 0, "errores": []}
     errores = [(motivos[i] if i < len(motivos) else "RECHAZADO")[:220] for i in rechazados]
     return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados), "failed": len(rechazados), "errores": errores}
+
+
+def _parse_evidencia_ejecucion_m07(texto: str) -> Optional[dict]:
+    """Resultado/evidencia_ejecucion_<TC>.json de M07 RF-102 (QA de Laura Lopez):
+    {"caso": "TC-M07-G052", "estado_final": "APROBADO|RECHAZADO|BLOQUEADO",
+     "escenarios": [{"id": "E1", "estado": "APROBADO|RECHAZADO|BLOQUEADO|NO APLICA", ...}]}.
+    Un escenario RECHAZADO rechaza el caso. Aprobado solo si `estado_final` es
+    APROBADO y todo escenario esta APROBADO o NO APLICA; BLOQUEADO (o cualquier
+    otro) sin rechazo deja el caso Pendiente, igual que resultado-run."""
+    try:
+        d = json.loads(texto)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(d, dict) or not str(d.get("caso") or "").startswith("TC-M07-") \
+            or not isinstance(d.get("escenarios"), list) or "estado_final" not in d:
+        return None
+    esc = [e for e in d["escenarios"] if isinstance(e, dict)]
+    est = lambda e: re.sub(r"\s+", " ", str(e.get("estado") or "")).strip().upper()
+    final = re.sub(r"\s+", " ", str(d.get("estado_final") or "")).strip().upper()
+    rechazados = [e for e in esc if est(e) in ("RECHAZADO", "FALLIDO", "FALLA")]
+    aprobados = [e for e in esc if est(e) == "APROBADO"]
+    if rechazados or final in ("RECHAZADO", "FALLIDO"):
+        errores = [f"{e.get('id', '')}: {e.get('obtenido') or e.get('nombre') or 'RECHAZADO'}"[:220] for e in rechazados]
+        return {"total": len(aprobados) + len(rechazados), "passed": len(aprobados),
+                "failed": max(len(rechazados), 1), "errores": errores}
+    if final == "APROBADO" and aprobados and all(est(e) in ("APROBADO", "NO APLICA") for e in esc):
+        return {"total": len(aprobados), "passed": len(aprobados), "failed": 0, "errores": []}
+    return {"total": 0, "passed": 0, "failed": 0, "errores": []}
 
 
 def _parse_resumen_m06_json(texto: str) -> Optional[dict]:
@@ -810,6 +838,7 @@ _PARSERS_POR_EXT = {
         ("k6-resumen", _parse_k6_resumen),
         ("resultado-run", _parse_resultado_run),
         ("resumen-m06", _parse_resumen_m06_json),
+        ("evidencia-m07", _parse_evidencia_ejecucion_m07),
     ],
     ".html": [
         ("pytest-html", _parse_pytest_html),
@@ -1012,7 +1041,7 @@ def _modulo_de_id(id_incidencia: str) -> Optional[int]:
 
 def _leer_incidencias() -> tuple[list, dict]:
     """Incidencias de todos los modulos y el estado de la lectura de Taiga.
-    Los modulos de taiga.MODULOS (3 a 6) salen de Taiga; el resto, de
+    Los modulos de taiga.MODULOS (3 a 8) salen de Taiga; el resto, de
     incidencias.csv. Si Taiga esta apagado o no hay nada que mostrar de ahi
     (ni del ultimo intento bueno), esos modulos se leen del CSV."""
     filas = []
